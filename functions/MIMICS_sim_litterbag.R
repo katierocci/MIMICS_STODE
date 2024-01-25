@@ -42,9 +42,19 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, nspin_yrs=10, nspin
 
   for (d in 1:nday)  { 
     # For recalc of Tpars from daily forcing data
-    if (!is.na(dailyInput)) {
+    if (all(!is.na(dailyInput))) {
+      if(d > 365){
+        div_by <- floor(d/365)
+        d = d - (365 * div_by) 
+        if(d==0){
+          d=365
+        }
+      }
+      
+      print(d)
+      
       # Set daily Tpars from daily state variables in "dailyInput" dataframe (added in function arguments)
-      Tpars_mod = calc_Tpars( ANPP = dailyInput$ANPP[d], #<-- ENSURE these settings match the ss run
+      Tpars_mod = calc_Tpars_Conly( ANPP = dailyInput$ANPP[d], #<-- ENSURE these settings match the ss run
                              fCLAY = dailyInput$fCLAY[d], 
                              TSOI = dailyInput$TSOI[d], 
                              MAT = dailyInput$MAT[d], 
