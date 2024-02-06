@@ -26,8 +26,8 @@ source("functions/MC_parameterization/set_parameter_defaults.R")
 MSBio <- read.csv("Example_simulations/Data/Site_annual_clim.csv")
 #match input data structure
 #don't have gravimetric soil moisture, just volumetric, assuming a BD of 1g/cm3 makes them equivalent (could be bad assumption given this is BD of leaves)
-data <- MSBio %>% mutate(SITE = Site, ANPP = AGNPP_sum, TSOI = TSOI_mean, fCLAY = PCT_CLAY_mean, grav_moisture = H2OSOI_mean*100) %>%
-  select(SITE, ANPP, TSOI, fCLAY, LIG, C, N, CN, LIG_N, grav_moisture)
+data <- MSBio %>% mutate(SITE = Site, ANPP = AGNPP_sum*2, TSOI = TSOI_mean, CLAY = PCT_CLAY_mean, grav_moisture = H2OSOI_mean*100) %>%
+  select(SITE, ANPP, TSOI, CLAY, LIG, C, N, CN, LIG_N, grav_moisture)
 #colnames(data) <- toupper(colnames(data))
 
 #MSBio litter bags based variation in NEON litter (not separated by species)
@@ -53,18 +53,19 @@ MIM_runs <- 100
 
 ### Create random parameter dataframe
 ## Parameter range informed by range observed over 10+ MCMC analysis results
-rand_params <- data.frame(# Tau_x = runif(MIM_runs, 0.3, 3),
+rand_params <- data.frame( Tau_x = runif(MIM_runs, 0.3, 3),
   # Tau_r = runif(MIM_runs, 0.3, 3),
   # Tau_k = runif(MIM_runs, 0.3, 3)#,
-  CUE_x = runif(MIM_runs, 0.5, 1.4)#, 
+  CUE_x = runif(MIM_runs, 0.5, 1.4), 
   # CUE_r = runif(MIM_runs, 0.5, 1.4),
   # CUE_k = runif(MIM_runs, 0.5, 1.4)
   #Vslope_x = runif(MIM_runs, 0.5, 2)#,
   #Vint_x = runif(MIM_runs, 0.8, 1.3)
   #Kslope_x = runif(MIM_runs, 0.5, 2),
   #Kint_x = runif(MIM_runs, 0.5, 2)#,
-  #vMOD_x = runif(MIM_runs, 0.5, 2)
-  #kMOD_x = runif(MIM_runs, 0.5, 2)  
+  vMOD_x = runif(MIM_runs, 0.5, 2),
+  #kMOD_x = runif(MIM_runs, 0.5, 2) 
+  aV_x = runif(MIM_runs, 0.5, 2)
 )
 
 rand_params$run_num <- seq(1,MIM_runs,1)
