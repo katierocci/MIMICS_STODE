@@ -33,7 +33,7 @@ fW_p1 <- 1.212580 #* 0.6867031  # MSBio new
 fW_p2 <- 2.748028 #* 0.6300376  # MSBio new
 
 #Set default methods
-fWmethod=0.      #0-> fW=1, 1->CORPSE, 2->Calibrated 
+fWmethod=0.      #0-> fW=1, 1->CORPSE, 2->Calibrated, 3->water scalar from other model
 historic=FALSE   #modify Vmax based on historic MAT
 fixed_fMET=FALSE #calculate fMET based on litter chemistry
 tauMethod='NPP'  #'NPP' and 'beta' accepted

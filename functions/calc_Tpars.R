@@ -8,11 +8,11 @@
 # Assumes:
 # -- ANPP is gC, not gDW
 # -- Clay is a fraction (0-1)
-# -- fWmethod is describes how to calculate fW 0=none 1=corpse, 2=calibrated 
+# -- fWmethod is describes how to calculate fW 0=none 1=corpse, 2=calibrated, 3=moisture scalar from other model
 # -- historic is a logical for using historic MAT to modify Vslope & Vint
 
 calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
-                             theta_liq=NA, theta_frzn=NA) {
+                             theta_liq=NA, theta_frzn=NA, W_SCALAR=NA, litfall=NA) {
   
   # Set lig:N value if not given
   if (is.na(LIG_N)) {
@@ -36,6 +36,8 @@ calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
     fW = (theta_liq^fW_p1 * air_filled_porosity^fW_p2)/fW_p3
     fW = max(0.05, fW) 
     
+  } else if (fWmethod==3) {
+    fW=W_SCALAR
   }
   
   # For historic MAT dependent kinetics
@@ -54,9 +56,13 @@ calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
   }
 
   
-  # Calc litter input rate
-  EST_LIT <- (ANPP / (365*24)) * 1e3 / 1e4
-
+  # Calc litter input rate from annual or daily flux then convert units
+  if (is.na(litfall)) {
+    EST_LIT <- (ANPP / (365*24)) * 1e3 / 1e4
+  } else {
+    EST_LIT <- (litfall / 24) * 1e3 / 1e4
+  }
+  
   # ------------ calculate time varying parameters ---------------
   Vmax     <- exp(TSOI * Vslope + Vint) * aV * fW   #<-- Moisture scalar applied
   Km       <- exp(TSOI * Kslope + Kint) * aK
@@ -67,7 +73,7 @@ calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
     Tau_MOD1[Tau_MOD1 > Tau_MOD[3]] <- Tau_MOD[3] 
     beta=1 # turns off beta
   } else if (tauMethod=='beta') {
-    Tau_MOD1 <- 1. # turns off NPP efffects on turnover
+    Tau_MOD1 <- 1 # turns off NPP effects on turnover
     beta=beta[1] # use Kat's density dependent function         
   }
   
@@ -75,7 +81,7 @@ calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
   
   tau <- c(tau_r[1]*exp(tau_r[2]*fMET), 
            tau_K[1]*exp(tau_K[2]*fMET))   
-  tau <- tau * Tau_MOD1 * Tau_MOD2 * Tau_MULT #* fW #<-- TODO Should this be moisture dependent? [DP 1/12/2024]
+  tau <- tau * Tau_MOD1 * Tau_MOD2 * Tau_MULT 
   
   fPHYS    <- c(fPHYS_r[1] * exp(fPHYS_r[2]*fCLAY), 
                 fPHYS_K[1] * exp(fPHYS_K[2]*fCLAY)) 	            

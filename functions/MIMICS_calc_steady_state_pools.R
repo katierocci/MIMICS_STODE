@@ -3,7 +3,7 @@ library(rootSolve)
 
 ###############################################
 # MIMICS single point function
-#> Input dataframe ("df") must contain columns: SITE, ANPP, fCLAY, TSOI, LIG_N or LIG + CN // Optional: MAT, GWC  
+#> Input dataframe ("df") must contain columns: SITE, ANPP, fCLAY, TSOI, LIG_N or LIG + CN // Optional: MAT, GWC, W_SCALAR 
 #>> With output required for running forward
 ###############################################
 MIMICS_SS <- function(df){
@@ -42,6 +42,9 @@ MIMICS_SS <- function(df){
   if(is.null(MAT)){
     MAT <- TSOI
   }
+  
+  #Bring in W_SCALAR if present
+  W_SCALAR = df$W_SCALAR
 
   ############################################################
   # MIMICS MODEL CODE STARTS HERE
@@ -49,7 +52,7 @@ MIMICS_SS <- function(df){
   # function calculates fMET with LIG_N if provided in input data.
   Tpars <- calc_Tpars_Conly(ANPP=ANPP, fCLAY=fCLAY, TSOI=TSOI, MAT=MAT,     
                             CN=CN, LIG=LIG, LIG_N=LIG_N,
-                            theta_liq=theta_liq, theta_frzn=theta_frzn) 
+                            theta_liq=theta_liq, theta_frzn=theta_frzn, W_SCALAR = W_SCALAR) 
   
   # Create arrays to hold output
   lit     <- Tpars$I

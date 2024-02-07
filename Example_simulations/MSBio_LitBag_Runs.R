@@ -6,6 +6,7 @@ library(dplyr)
 library(purrr)
 library(rwa)
 
+
 source("functions/MIMICS_sim_litterbag.R")
 source("functions/MIMICS_calc_steady_state_pools.R")
 source("functions/calc_Tpars.R")
@@ -34,8 +35,10 @@ MSBio2 <- MSBio %>% mutate(SITE = Site, ANPP = AGNPP_sum*2, TSOI = TSOI_mean, CL
   select(SITE, ANPP, TSOI, CLAY, LIG, C, N, CN, LIG_N, GWC, W_SCALAR) 
 #daily data - change site name and MSBio2 row (1=BART, 8=SERC) to use different site daily input
 BART_dailyinput <- read.csv("Example_simulations/Data//BART_clim.csv")
-BART_DI <- BART_dailyinput %>% mutate(DAY=X, ANPP = AGNPP*2, CLAY = rep(MSBio2[1,4], 366), LIG_N = rep(MSBio2[1,9], 366), GWC = H2OSOI*100) %>%
-  select(DAY, ANPP, TSOI, CLAY, LIG_N, GWC, W_SCALAR) 
+BART_DI <- BART_dailyinput %>% mutate(DAY=X, ANPP = rep(sum(LITFALL)*2,366), LITFALL=LITFALL*2, CLAY = rep(MSBio2[1,4], 366), 
+                                       LIG_N = rep(MSBio2[1,9], 366), GWC = H2OSOI*100) %>%
+  select(DAY, ANPP, LITFALL, TSOI, CLAY, LIG_N, GWC, W_SCALAR) 
+
 
 #Option 1: MSBio litter bags with just variation in NEON litter (not separated by species)
 MSBio_BAGS <- read.csv("Example_simulations/Data/NEON_MSB_LitVars.csv")
@@ -123,11 +126,14 @@ BAGS_out_BART_SS <- BAGS_BART %>% split(1:nrow(BAGS_BART)) %>% map(~ MIMICS_LITB
                                                                            litadd_day=10,
                                                                            verbose=T)) %>% bind_rows()
 
+
+
 #all sites and all litters
-BAGS_mean <- filter(BAGS, TYPE == "mean")
-BAGS_input <- split(BAGS_mean, 1:nrow(BAGS_mean))
-forcing_input <- split(MSBio2, 1:nrow(MSBio2))
-BAGS_out_AllSites <- map2(forcing_input, BAGS_input, ~MIMICS_LITBAG(.x, .y, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T)) %>% bind_rows()
+# BAGS_mean <- filter(BAGS, TYPE == "mean")
+# BAGS_input <- split(BAGS_mean, 1:nrow(BAGS_mean))
+# forcing_input <- split(MSBio2, 1:nrow(MSBio2))
+# BAGS_out_AllSites <- map2(forcing_input, BAGS_input, ~MIMICS_LITBAG(.x, .y, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T)) %>% bind_rows()
+
 
 ####
 #plot output
@@ -139,10 +145,10 @@ colorBlind7  <- c("#E69F00", "#56B4E9", "#009E73",
 #Formating observational data for comparing to field litter mass loss
 Field_LML <- read.csv("Example_simulations/Data/Litter_decomp_all.csv")
 #Add Species to group_by to get species-specific summary
-LML_sum2 <- Field_LML  %>% group_by(site, time.point) %>% drop_na(percent.loss.litter) %>% mutate(percent.loss.C = (percent.loss.litter/2)*100) %>% 
-                                                                                                summarize(mean.ML = mean(percent.loss.C),
+#note that becasue this is percent loss you do not need to convert to C!
+LML_sum2 <- Field_LML  %>% group_by(site, time.point) %>% drop_na(percent.loss.litter) %>% summarize(mean.ML = mean(percent.loss.litter*100),
                                                                                                 n = n(),
-                                                                                                sd = sd(percent.loss.C/2),
+                                                                                                sd = sd(percent.loss.litter*100),
                                                                                                 SE = sd/sqrt(n),
                                                                                                 lci.ML = mean.ML - qt(1 - ((1 - 0.95) / 2), n - 1) * SE,
                                                                                                 uci.ML = mean.ML + qt(1 - ((1 - 0.95) / 2), n - 1) * SE,
@@ -162,6 +168,7 @@ ggplot() +
   xlab("Day") +
   theme_bw(base_size = 20)
 ggplot(BAGS_out_AllSites, aes(x=DAY, y=MICr/MICk, color=SITE)) + geom_line()
+
 
 ###
 #moisture function testing
@@ -240,9 +247,9 @@ ggplot(BAGS_out_AllSites, aes(x=DAY, y=MICr/MICk, color=SITE)) + geom_line()
 # BAGS_out_BART <- BAGS_out_BART %>% mutate(YEAR = c(rep(1, 365), rep(2, 365), rep(3, 365), rep(4, 365), rep(5, 365))) %>%
 #   inner_join(BAGS_BART_sum)
 ggplot() +
-  geom_line(data=BAGS_out_BART, aes(y=MICr+MICk, x=DAY, color = "MIC", linetype ="daily"), linewidth=2, alpha=0.5) +
-  geom_line(data=BAGS_out_BART, aes(y=LITm+LITs, x=DAY, color = "Litter", linetype ="daily"), linewidth=2, alpha=0.5) +
-  geom_line(data=BAGS_out_BART, aes(y=SOMa+SOMc+SOMp, x=DAY, color = "SOM", linetype ="daily"), linewidth=2, alpha=0.5) +
+  geom_line(data=BAGS_out_BART_daily, aes(y=MICr+MICk, x=DAY, color = "MIC", linetype ="daily"), linewidth=2, alpha=0.5) +
+  geom_line(data=BAGS_out_BART_daily, aes(y=LITm+LITs, x=DAY, color = "Litter", linetype ="daily"), linewidth=2, alpha=0.5) +
+  geom_line(data=BAGS_out_BART_daily, aes(y=SOMa+SOMc+SOMp, x=DAY, color = "SOM", linetype ="daily"), linewidth=2, alpha=0.5) +
   geom_line(data=BAGS_out_BART_SS, aes(y=MICr+MICk, x=DAY, color = "MIC", linetype ="steady state"), linewidth=2, alpha=0.5,) +
   geom_line(data=BAGS_out_BART_SS, aes(y=LITm+LITs, x=DAY, color = "Litter", linetype ="steady state"), linewidth=2, alpha=0.5) +
   geom_line(data=BAGS_out_BART_SS, aes(y=SOMa+SOMc+SOMp, x=DAY, color = "SOM", linetype ="steady state"), linewidth=2, alpha=0.5) +
@@ -338,4 +345,5 @@ df_check <- df_analysis %>% filter(MICrK > 0.01) %>%
   filter(MIC/SOC < 0.40) #closer but MICr still crashing at TALL - why at TALL? OSBS seems more extreme....
 MIM_rwa <- rwa(df_check, "LIT_PerLoss", c("TSOI", "GWC", "LIG_N", "MICrK"), applysigns = TRUE, plot = TRUE)
 plot_rwa(MIM_rwa)
+
 
