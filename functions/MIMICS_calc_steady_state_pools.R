@@ -19,6 +19,7 @@ MIMICS_SS <- function(df){
   
   ### Bring in forcing ANPP value, convert gDW to gC
   ANPP <- df$ANPP/2
+  LITFALL <- df$LITFALL/2
   
   ### Bring in CLAY value, convert from percent to decimal
   fCLAY <- df$CLAY/100
@@ -52,7 +53,8 @@ MIMICS_SS <- function(df){
   # function calculates fMET with LIG_N if provided in input data.
   Tpars <- calc_Tpars_Conly(ANPP=ANPP, fCLAY=fCLAY, TSOI=TSOI, MAT=MAT,     
                             CN=CN, LIG=LIG, LIG_N=LIG_N,
-                            theta_liq=theta_liq, theta_frzn=theta_frzn, W_SCALAR = W_SCALAR) 
+                            theta_liq=theta_liq, theta_frzn=theta_frzn, 
+                            W_SCALAR = W_SCALAR, LITFALL=LITFALL) 
   
   # Create arrays to hold output
   lit     <- Tpars$I
@@ -98,7 +100,7 @@ MIMICS_SS <- function(df){
   MIMout <- list()
   MIMout[[1]] <- as.numeric(test[[1]]) * depth *1e4 / 1e6   # MIMICS steady state C pools
   MIMout[[2]] <- Tpars                                      # MIMICS parameters used for/from simulation
-  MIMout[[3]] <- df                                         # Forcing dataframe
+  MIMout[[3]] <- df[1,]                                         # Forcing dataframe
   MIMout[[4]] <- as.numeric(test[[2]]) * depth *1e4 / 1e6   # CO2-r & CO2-k pools 
   
   return(MIMout)

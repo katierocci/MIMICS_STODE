@@ -16,7 +16,7 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
   
   if(verbose){
     print("-------------------------------------------------------")
-    print(paste0("Starting ", forcing_df$SITE, " - ", litBAG[1]))
+    print(paste0("Starting ", forcing_df$SITE[1], " - ", litBAG[1]))
     print("-------------------------------------------------------")
   }
   # drop litterfall if proivded
@@ -58,7 +58,7 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
       } else {input_doy <- d}
 
       # Set daily Tpars from "dailyInput" dataframe (add in the function arguments)
-      Tpars_mod = calc_Tpars_Conly(ANPP = dailyInput$ANPP[input_doy]/2,
+        Tpars_mod = calc_Tpars_Conly(ANPP = dailyInput$ANPP[input_doy]/2,
                              fCLAY = dailyInput$CLAY[input_doy]/100, 
                              TSOI = dailyInput$TSOI[input_doy], 
                              MAT = dailyInput$MAT[input_doy], 
@@ -67,7 +67,8 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
                              LIG = dailyInput$LIG[input_doy],  # Only needed if LIG_N not supplied 
                              theta_liq = dailyInput$GWC[input_doy]/100, 
                              theta_frzn = 0,  # Change to column name if frozen water content is available
-                             W_SCALAR = dailyInput$W_SCALAR[input_doy]) 
+                             W_SCALAR = dailyInput$W_SCALAR[input_doy],
+                             LITFALL=dailyInput$LITFALL[input_doy]/2) 
     } else {
       # Use ss Tpars (i.e., same forcing variables for each sim day)
       Tpars_mod = Tpars
@@ -141,7 +142,7 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
   LITBAG_out <- LITBAG_out * depth * 1e4 / 1e6 # Soil depth and unit conversion 
   LITBAG_out <- as.data.frame(t(LITBAG_out))
   colnames(LITBAG_out) <- c("LITBAGm", "LITBAGs", "LITm", "LITs", "MICr", "MICk", "SOMp", "SOMc", "SOMa")
-  LITBAG_out <- cbind(data.frame(SITE = forcing_df$SITE,
+  LITBAG_out <- cbind(data.frame(SITE = forcing_df$SITE[1],
                                  Litter_Type = as.character(litBAG[1]),
                                  DAY=seq(1:nrow(LITBAG_out))), LITBAG_out)
   

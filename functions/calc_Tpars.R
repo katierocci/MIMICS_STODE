@@ -12,13 +12,8 @@
 # -- historic is a logical for using historic MAT to modify Vslope & Vint
 
 calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
-                             theta_liq=NA, theta_frzn=NA, W_SCALAR=NA, litfall=NA) {
+                             theta_liq=NA, theta_frzn=NA, W_SCALAR=NA, LITFALL=NA) {
   
-  # Set lig:N value if not given
-  if (is.na(LIG_N)) {
-    LIG_N <- (LIG/100)/(1/(CN/2.5))
-  }
-
   # Set moisture control on kinetics (fW)
   if (fWmethod==0) {
     fW=1
@@ -45,8 +40,25 @@ calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
     Vslope = Vslope + (MAT*0.00104) 
     Vint = Vint - (MAT*0.0228) 
   }
-  
 
+  # ------------ calculate time varying parameters ---------------
+  Vmax     <- exp(TSOI * Vslope + Vint) * aV * fW   #<-- Moisture scalar applied
+  Km       <- exp(TSOI * Kslope + Kint) * aK
+  
+  if (length(Vmax)>1) {
+    Vmax = mean(Vmax)
+    Km = mean(Km)
+    LIG_N = LIG_N[1]
+    LITFALL = mean(LITFALL)
+    ANPP = ANPP[1]
+    fCLAY = fCLAY[1]
+  }
+
+  # Set lig:N value if not given
+  if (is.na(LIG_N)) {
+    LIG_N <- (LIG/100)/(1/(CN/2.5))
+  }
+  
   # set fMET
   if(!fixed_fMET){
     fMET  <- fmet_p[1] * (fmet_p[2] - fmet_p[3] * LIG_N)    
@@ -57,15 +69,11 @@ calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
 
   
   # Calc litter input rate from annual or daily flux then convert units
-  if (is.na(litfall)) {
+  if (is.na(LITFALL)) {
     EST_LIT <- (ANPP / (365*24)) * 1e3 / 1e4
   } else {
-    EST_LIT <- (litfall / 24) * 1e3 / 1e4
+    EST_LIT <- (LITFALL / 24) * 1e3 / 1e4
   }
-  
-  # ------------ calculate time varying parameters ---------------
-  Vmax     <- exp(TSOI * Vslope + Vint) * aV * fW   #<-- Moisture scalar applied
-  Km       <- exp(TSOI * Kslope + Kint) * aK
   
   if (tauMethod == 'NPP') {
     Tau_MOD1 <- sqrt(ANPP/Tau_MOD[1])         
@@ -95,6 +103,7 @@ calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
   
   pSCALAR  <- PHYS_scalar[1] * exp(PHYS_scalar[2]*(sqrt(fCLAY)))  #Scalar for texture effects on SOMp
   
+  ## TODO check this doesn't need to be included in daily Vmax calculations
   v_MOD    <- vMOD  
   k_MOD    <- kMOD 
   k_MOD[3] <- k_MOD[3] * pSCALAR    
@@ -107,7 +116,7 @@ calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
   I[1]    <- (EST_LIT / depth) * fMET     
   I[2]    <- (EST_LIT / depth) * (1-fMET)
   Inputs  <- I
-  
+
   LITmin  <- rep(NA, dim=4)
   MICtrn  <- c(NA,NA,NA,NA,NA,NA)
   SOMmin  <- rep(NA, dim=2)
