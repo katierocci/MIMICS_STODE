@@ -22,8 +22,8 @@ MIMrepeat <- function(forcing_df, litBAG, rparams) { #need to remove litBAG if y
   #  CUE <<- c(CUE_default[1] * rparams$CUE_x[1], CUE_default[2] * rparams$CUE_x[1], CUE_default[3], CUE_default[4])  #add indexing to just get r or K-selected
   #  CUE <<- c(CUE_default[1] * rparams$CUE_r[1], CUE_default[2] * rparams$CUE_r[1], CUE_default[3] * rparams$CUE_k[1], CUE_default[4] * rparams$CUE_k[1]) #seperate for r and K
    vMOD <<- vMOD_default * rparams$vMOD_x[1]
-  # kMOD <<- kMOD_default * rparams$kMOD_x[1]
-   aV <<- aV_default * rparams$aV_x[1]
+   kMOD <<- kMOD_default * rparams$kMOD_x[1]
+  # aV <<- aV_default * rparams$aV_x[1]
   
   
   #below should go through each site with the same litter at all

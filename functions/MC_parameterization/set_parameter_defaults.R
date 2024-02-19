@@ -8,3 +8,4 @@ CUE_default <- CUE
 Tau_MULT_default <- Tau_MULT 
 aV_default <- aV
 vMOD_default <- vMOD
+kMOD_default <- kMOD

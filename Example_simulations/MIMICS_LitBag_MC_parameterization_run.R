@@ -18,17 +18,16 @@ source("functions/MIMICS_sim_litterbag.R")
 source("functions/MC_parameterization/MIMICS_LitBag_repeat.R")
 source("functions/MC_parameterization/set_parameter_defaults.R")
 
-
 ########################################
 # Load forcing data
 ########################################
 #load site data
 MSBio <- read.csv("Example_simulations/Data/Site_annual_clim.csv")
-#match input data structure
-#don't have gravimetric soil moisture, just volumetric, assuming a BD of 1g/cm3 makes them equivalent (could be bad assumption given this is BD of leaves)
-data <- MSBio %>% mutate(SITE = Site, ANPP = AGNPP_sum*2, TSOI = TSOI_mean, CLAY = PCT_CLAY_mean, grav_moisture = H2OSOI_mean*100) %>%
-  select(SITE, ANPP, TSOI, CLAY, LIG, C, N, CN, LIG_N, grav_moisture)
-#colnames(data) <- toupper(colnames(data))
+#match input data strucutre
+#AGNPP should be in gDW!! multiply by 2 here to remedy
+#don't have gravimetric soil moisture, just volumetric, assuming a BD of 1g/cm3 makes them equivalent - could be bad assumption given this is BD of leaves
+data <- MSBio %>% mutate(SITE = Site, ANPP = AGNPP_sum*2, TSOI = TSOI_mean, CLAY = PCT_CLAY_mean, lig_N = LIG_N, GWC = H2OSOI_mean*100, W_SCALAR=W_SCALAR_mean) %>%
+  select(SITE, ANPP, TSOI, CLAY, LIG, C, N, CN, LIG_N, GWC, W_SCALAR) 
 
 #MSBio litter bags based variation in NEON litter (not separated by species)
 MSBio_BAGS <- read.csv("Example_simulations/Data/NEON_MSB_LitVars.csv")
@@ -64,8 +63,7 @@ rand_params <- data.frame( Tau_x = runif(MIM_runs, 0.3, 3),
   #Kslope_x = runif(MIM_runs, 0.5, 2),
   #Kint_x = runif(MIM_runs, 0.5, 2)#,
   vMOD_x = runif(MIM_runs, 0.5, 2),
-  #kMOD_x = runif(MIM_runs, 0.5, 2) 
-  aV_x = runif(MIM_runs, 0.5, 2)
+  kMOD_x = runif(MIM_runs, 0.5, 2)  
 )
 
 rand_params$run_num <- seq(1,MIM_runs,1)
@@ -88,6 +86,7 @@ start_time <- Sys.time()
 #if only doing a single litter type, change mapping function in LitBag_MIMICS_repeat
 MC_MIMICS <- rand_params %>% split(1:nrow(rand_params)) %>% future_map(~MIMrepeat(forcing_df = data, litBAG = BAGS_mean, rparams = .), .progress=TRUE) %>% 
   bind_rows() 
+
 
 
 wall_time <- Sys.time() - start_time

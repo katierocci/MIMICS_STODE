@@ -3,7 +3,7 @@
 ########################################
 Vslope  <- rep(0.063, 6)
 Vint    <- rep(5.47, 6)
-aV      <- rep(0.000008, 6)
+aV      <- rep(0.000013, 6) #originally: rep(0.000008, 6)
 Kslope  <- rep(c(0.025, 0.035, 0.025),2)
 Kint    <- rep(3.19, 6)
 aK      <- rep(10, 6)
@@ -33,8 +33,8 @@ fW_p1 <- 1.212580 #* 0.6867031  # MSBio new
 fW_p2 <- 2.748028 #* 0.6300376  # MSBio new
 
 #Set default methods
-fWmethod=0.      #0-> fW=1, 1->CORPSE, 2->Calibrated, 3->water scalar from other model
-historic=FALSE   #modify Vmax based on historic MAT
+fWmethod=3.      #0-> fW=1, 1->CORPSE, 2->Calibrated, 3->water scalar from other model
+historic=TRUE   #modify Vmax based on historic MAT
 fixed_fMET=FALSE #calculate fMET based on litter chemistry
 tauMethod='NPP'  #'NPP' and 'beta' accepted
 

@@ -75,10 +75,6 @@ BAGS$BAG_LITs <- ((BAG_init_size * 1e3 / 1e4)/ depth) * (1-BAGS$CALC_MET) #initi
 #run litterbag model 
 ####
 
-#Individual litters decomposing too fast
-#try N re-absorption
-#try min and max of litter COMBO values
-#compare to litter mass loss in observations
 
 #SERC and all SERC litters (1) for 2 years
 BAGS_SERC <- filter(BAGS, Site == "SERC" & TYPE == "mean")
@@ -129,10 +125,10 @@ BAGS_out_BART_SS <- BAGS_BART %>% split(1:nrow(BAGS_BART)) %>% map(~ MIMICS_LITB
 
 
 #all sites and all litters
-# BAGS_mean <- filter(BAGS, TYPE == "mean")
-# BAGS_input <- split(BAGS_mean, 1:nrow(BAGS_mean))
-# forcing_input <- split(MSBio2, 1:nrow(MSBio2))
-# BAGS_out_AllSites <- map2(forcing_input, BAGS_input, ~MIMICS_LITBAG(.x, .y, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T)) %>% bind_rows()
+BAGS_mean <- filter(BAGS, TYPE=="mean")
+BAGS_input <- split(BAGS_mean, 1:nrow(BAGS_mean))
+forcing_input <- split(MSBio2, 1:nrow(MSBio2))
+BAGS_out_AllSites <- map2(forcing_input, BAGS_input, ~MIMICS_LITBAG(.x, .y, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T)) %>% bind_rows()
 
 
 ####
@@ -155,19 +151,22 @@ LML_sum2 <- Field_LML  %>% group_by(site, time.point) %>% drop_na(percent.loss.l
                                                                                                 doy = mean(days_elapsed)) %>% mutate(doy=round(doy, digits=0))
 #%>% filter(site == 'BART')
 
+
 #comparison of baseline MIMICS to LML
 LIT_init <- BAGS_out_AllSites %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% select(SITE, LITi)
 boxplot(LIT_init$LITi)
 BAGS_out_plot <- BAGS_out_AllSites %>% left_join(LIT_init, by = "SITE") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
+#plotting
 ggplot() +
-  geom_line(data=BAGS_out_plot, aes(y=100-LIT_PerLoss, x=DAY, group=SITE, color=SITE), linewidth=2, alpha=0.5) +
-  #geom_ribbon(data=BAGS_out_wide, aes(y=(mean/0.1)*100, x=DAY, ymin = (lci/0.1)*100, ymax=(uci/0.1)*100), alpha = 0.3) +
+  geom_line(data=BAGS_out_plot, aes(y=100-LIT_PerLoss, x=DAY, group=SITE, color=SITE), linewidth=1.5, alpha=0.5) +
+  #geom_ribbon(data=BAGS_out_wide, aes(y=100-mean, x=DAY, ymin = 100-lci, ymax=100-uci, alpha = 0.3)) +
   geom_point(data=LML_sum2, aes(y=100-mean.ML, x=doy+10, group=site, color=site), size = 3) +
   geom_errorbar(data=LML_sum2, aes(y=100-mean.ML, x=doy+10, ymin = 100-lci.ML, ymax = 100-uci.ML, group=site, color=site), width=0,linewidth=1) +
   ylab("Litter Bag C Remaining (%)") +
   xlab("Day") +
   theme_bw(base_size = 20)
 ggplot(BAGS_out_AllSites, aes(x=DAY, y=MICr/MICk, color=SITE)) + geom_line()
+
 
 
 ###
@@ -272,34 +271,65 @@ ggplot() +
 
 
 #can varying LQ get the same variability as at the sites?
+#within site
+# BAGS_out_AllSites$Litter_Type = "mean"
+# BAGS_out_AllSites_lci$Litter_Type = "lci"
+# BAGS_out_AllSites_uci$Litter_Type = "uci"
+# BAGS_out_AllSites <- rbind(BAGS_out_AllSites, BAGS_out_AllSites_lci, BAGS_out_AllSites_uci)
+# WIsite <- c("LENO", "SERC", "UNDE")
+#comparison of baseline MIMICS to LML and within site
+# LIT_init <- BAGS_out_AllSites %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% mutate(SITE.LT = paste(SITE, Litter_Type, sep=".")) %>% select(SITE>LT, LITi)
+# boxplot(LIT_init$LITi)
+# BAGS_out_plot <- BAGS_out_AllSites %>% mutate(SITE.LT = paste(SITE, Litter_Type, sep=".")) %>% left_join(LIT_init, by = "SITE.LT") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
+# #within site
+# BAGS_out_plot_withinsite <- BAGS_out_plot %>% filter(SITE %in% WIsite)
+# LML_WIsite <- LML_sum2 %>% filter(site %in% WIsite)
+# BAGS_out_wide = BAGS_out_plot_withinsite %>% filter(SITE=="LENO") %>% mutate(LITBAG = LITBAGm+LITBAGs) %>% select(SITE, Litter_Type, DAY, LITBAG) %>% 
+#   pivot_wider(names_from = Litter_Type, values_from = LITBAG)
+#plotting
 # ggplot() +
-#   geom_line(data=BAGS_out_wide, aes(y=(mean/0.1)*100, x=DAY), linewidth=1, alpha=0.5, color = "#E69F00", linetype =1) +
-#   geom_ribbon(data=BAGS_out_wide, aes(y=(mean/0.1)*100, x=DAY, ymin = (lci/0.1)*100, ymax=(uci/0.1)*100), alpha = 0.3) +
-#   geom_point(data=LML_sum2, aes(y=(1-mean.ML)*100, x=doy+10), color = "#E69F00", size = 3) +
-#   geom_errorbar(data=LML_sum2, aes(y=(1-mean.ML)*100, x=doy+10, ymin = (1-lci.ML)*100, ymax = (1-uci.ML)*100), width=0, color = "#E69F00",linewidth=1) +
+#   geom_line(data=BAGS_out_plot, aes(y=100-LIT_PerLoss, x=DAY, group=SITE, color=SITE), linewidth=0.5) +
+#   geom_ribbon(data=BAGS_out_wide, aes(y=100-mean, x=DAY, ymin = 100-lci, ymax=100-uci, alpha = 0.3)) +
+#   geom_point(data=LML_WIsite, aes(y=100-mean.ML, x=doy+10, group=site, color=site), size = 3) +
+#   geom_errorbar(data=LML_WIsite, aes(y=100-mean.ML, x=doy+10, ymin = 100-lci.ML, ymax = 100-uci.ML, group=site, color=site), width=0,linewidth=1) +
 #   ylab("Litter Bag C Remaining (%)") +
 #   xlab("Day") +
-#   labs(linetype="Parameter Set") +
-#   ggtitle("LQ induced variablity - LENO") +
 #   theme_bw(base_size = 20)
+# #   theme_bw(base_size = 20)
 # 
 # #can varying soil moisture get the same variability as at the sites?
-# #wide format MIMICS output for plotting
+# #One Site at a time: wide format MIMICS output for plotting
 # BAGS_out_wide = BAGS_out %>% mutate(LITBAG = LITBAGm+LITBAGs) %>% select(SITE, Litter_Type, DAY, LITBAG) %>% pivot_wider(names_from = Litter_Type, values_from = LITBAG)
 # BAGS_out_wide_wet = BAGS_out %>% mutate(LITBAG = LITBAGm+LITBAGs) %>% select(SITE, Litter_Type, DAY, LITBAG) %>% pivot_wider(names_from = Litter_Type, values_from = LITBAG)
 # BAGS_out_wide_dry = BAGS_out %>% mutate(LITBAG = LITBAGm+LITBAGs) %>% select(SITE, Litter_Type, DAY, LITBAG) %>% pivot_wider(names_from = Litter_Type, values_from = LITBAG)
-# ggplot() +
-#   geom_line(data=BAGS_out_wide_dry, aes(y=(mean/0.1)*100, x=DAY), linewidth=1.5, alpha=0.5, color = "#E69F00", linetype =1) +
-#   #geom_line(data=BAGS_out_wide, aes(y=(mean/0.1)*100, x=DAY), linewidth=1.5, alpha=0.5, color = "#E69F00", linetype =2) +
-#   geom_line(data=BAGS_out_wide_mid, aes(y=(mean/0.1)*100, x=DAY), linewidth=1.5, alpha=0.5, color = "#E69F00", linetype =3) +
-#   #geom_ribbon(data=BAGS_out_wide, aes(y=(mean/0.1)*100, x=DAY, ymin = (lci/0.1)*100, ymax=(uci/0.1)*100), alpha = 0.3) +
-#   geom_point(data=LML_sum2, aes(y=(1-mean.ML)*100, x=doy+10), color = "#E69F00", size = 3) +
-#   geom_errorbar(data=LML_sum2, aes(y=(1-mean.ML)*100, x=doy+10, ymin = (1-lci.ML)*100, ymax = (1-uci.ML)*100), width=0, color = "#E69F00",linewidth=1) +
-#   ylab("Litter Bag C Remaining (%)") +
-#   xlab("Day") +
-#   labs(linetype="Parameter Set") +
-#   ggtitle("fW=0.05 (solid); fW = 0.5 (dotted)- LENO") +
-#   theme_bw(base_size = 20)
+#All sites together
+BAGS_out_AllSites$Mois = "avg"
+BAGS_out_AllSites_wet$Mois = "wet"
+BAGS_out_AllSites_dry$Mois = "dry"
+BAGS_out_AllSites <- rbind(BAGS_out_AllSites, BAGS_out_AllSites_wet, BAGS_out_AllSites_dry)
+WIsite <- c("LENO", "SERC", "UNDE")
+LIT_init <- BAGS_out_AllSites %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% mutate(SITE.MT = paste(SITE, Mois, sep=".")) %>% select(SITE.MT, LITi)
+boxplot(LIT_init$LITi)
+BAGS_out_plot <- BAGS_out_AllSites %>% mutate(SITE.MT = paste(SITE, Mois, sep=".")) %>% left_join(LIT_init, by = "SITE.MT") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
+#within site
+BAGS_out_plot_withinsite <- BAGS_out_plot %>% filter(SITE %in% WIsite)
+LML_WIsite <- LML_sum2 %>% filter(site %in% WIsite)
+BAGS_out_wide = BAGS_out_plot_withinsite  %>% mutate(LITBAG = LITBAGm+LITBAGs) %>% select(SITE, Mois, DAY, LIT_PerLoss) %>%
+  pivot_wider(names_from = Mois, values_from = LIT_PerLoss)
+ggplot() +
+  #geom_line(data=BAGS_out_plot_withinsite, aes(y=100-LIT_PerLoss, x=DAY, group=SITE, color=SITE)) +
+  geom_ribbon(data=BAGS_out_wide, aes(y=100-avg, x=DAY, ymin = 100-dry, ymax=100-wet, fill=SITE), alpha=0.5) +
+  #geom_line(data=BAGS_out_wide_dry, aes(y=(mean/0.1)*100, x=DAY), linewidth=1.5, alpha=0.5, color = "#E69F00", linetype =1) +
+  #geom_line(data=BAGS_out_wide, aes(y=(mean/0.1)*100, x=DAY), linewidth=1.5, alpha=0.5, color = "#E69F00", linetype =2) +
+  #geom_line(data=BAGS_out_wide_mid, aes(y=(mean/0.1)*100, x=DAY), linewidth=1.5, alpha=0.5, color = "#E69F00", linetype =3) +
+  #geom_ribbon(data=BAGS_out_wide, aes(y=(mean/0.1)*100, x=DAY, ymin = (lci/0.1)*100, ymax=(uci/0.1)*100), alpha = 0.3) +
+  geom_point(data=LML_WIsite, aes(y=100-mean.ML, x=doy+10, color=site), size = 3) +
+  geom_errorbar(data=LML_WIsite, aes(y=100-mean.ML, x=doy+10, ymin = 100-lci.ML, ymax = 100-uci.ML, color=site), width=0, linewidth=1) +
+  ylab("Litter Bag C Remaining (%)") +
+  xlab("Day") +
+  labs(linetype="Parameter Set") +
+  ggtitle("Variation in litter decomposition with +/- 8% W_SCALAR") +
+  theme_bw(base_size = 20)
 
 ####
 #plot output - comparing observed to MIMICS microbial community
@@ -333,6 +363,7 @@ df_LML <- df %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% right_join(Field
 #comparison of modeled and observed
 modelVobs <- lm(LIT_PerLoss~mean.ML, data=df_LML)
 summary(modelVobs)
+sqrt(mean((df_LML$mean.ML - df_LML$LIT_PerLoss)^2))
 ggplot(df_LML, aes(x=mean.ML, y=LIT_PerLoss)) + geom_point(aes(color=SITE), size=4) + geom_smooth(method = "lm", color="black")  + xlim(0,50) + ylim(0,80) +
   xlab("Observed litter percent C loss") + ylab("Modeled litter percent C loss") + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16)
 #back to rwa
@@ -343,7 +374,29 @@ df_check <- df_analysis %>% filter(MICrK > 0.01) %>%
   filter(MICrK < 100) %>%
   filter(MIC/SOC > 0.0001) %>%
   filter(MIC/SOC < 0.40) #closer but MICr still crashing at TALL - why at TALL? OSBS seems more extreme....
-MIM_rwa <- rwa(df_check, "LIT_PerLoss", c("TSOI", "GWC", "LIG_N", "MICrK"), applysigns = TRUE, plot = TRUE)
+MIM_rwa <- rwa(df_check, "LIT_PerLoss", c("TSOI", "W_SCALAR", "LIG_N", "MICrK"), applysigns = TRUE, plot = TRUE)
 plot_rwa(MIM_rwa)
 
+
+#effect size
+FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% select(time.point,SITE.DAY, mean.ML)
+LIT_init <- BAGS_out_AllSites %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% select(SITE, LITi)
+boxplot(LIT_init$LITi)
+df <- BAGS_out_AllSites %>% left_join(LIT_init, by = "SITE")
+df_LML <- df %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
+df_analysis <- df_LML %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>%
+  filter(time.point==2) %>% inner_join(MSBio2, by="SITE")
+#logical checks
+df_check <- df_analysis %>% filter(MICrK > 0.01) %>%
+  filter(MICrK < 100) %>%
+  filter(MIC/SOC > 0.0001) %>%
+  filter(MIC/SOC < 0.40)
+Obs_ES_mod <- lm(LIT_PerLoss ~ TSOI+W_SCALAR+LIG_N+MICrK, data = df_check)
+Obs_ES <- as.data.frame(Obs_ES_mod$coefficients) #fixed effects coefficients as effect size
+Obs_ES$Vars <- rownames(Obs_ES)
+colnames(Obs_ES)[1] <- "value"
+Obs_ES <- Obs_ES[-1, ]
+Obs_ES$mult <- ifelse(Obs_ES$value <0, -1, 1)
+Obs_ES$rel_ES <- (abs(Obs_ES$value)/sum(abs(Obs_ES$value))) * 100 * Obs_ES$mult
+ggplot(Obs_ES, aes(x=Vars, y=rel_ES)) + geom_bar(stat="identity", fill="blue") + coord_flip() + geom_text(aes(label=round(rel_ES, digits=1)), color="red", size=7) +theme_bw(base_size = 16)
 

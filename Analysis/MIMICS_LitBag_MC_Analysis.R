@@ -4,51 +4,47 @@ library(ggridges)
 library(ggpubr)
 library(gridExtra)
 library(car)
+library(lmerTest)
+library(rwa)
 
-##need to figure out how to 
+
+#bringing input data together with output data
 #df <- readRDS("C:/github/MIMICS_MSBio/Cheyenne_HPC/HPC_output/MSBio_MIM_MC_runs-1e+05_20221028_112647_.rds")
-#MC_MIMICS <- readRDS('Derecho_HPC/Jan 2024/MC_output/MSBio_MC_10_20240117_104907_.rds')
+MC_MIMICS <- readRDS('~/Postdoc/MIMICS_STODE/Analysis/MC_output/MSBio_MC_5000_20240216_203530_.rds')
 df <- MC_MIMICS
 #rand_params <- readRDS('Cheyenne_HPC/July 2023/MIMICS_MSBio_KR/MC_output/MSBio_RP_1e+05_20230728_132810_Tc.rds')
 df <- left_join(MC_MIMICS, data, by = "SITE") #MC output has to be first for CO2 rows below to be right
-df <- left_join(df, rand_params, by = "run_num")
+#df <- left_join(df, rand_params, by = "run_num") #don't have random parameters )':
 #df$CO2_of_tot <- rowSums(df[,11:12])/rowSums(df[,4:12])
 df$MIM_CO <- as.numeric(df$MICr)/as.numeric(df$MICk)
 df$MIC_SOC <- (df$MICr+df$MICk)/(df$SOMc+df$SOMa+df$MICr+df$MICk)
 df$LITBAG_tot <- df$LITBAGm + df$LITBAGs
 
 #looking at parameter effects
-df_test <- df %>% filter(MIM_CO < 100)
-plot(df_test$beta_r, df_test$MIM_CO) #crazy vales near 1.2
-plot(df$beta_k, df$MIM_CO)
-plot(df_730$beta_k, df_730$LIT_PerLoss) #general increase with increased beta
-plot(df$beta_r, df$beta_k)
+# df_test <- df %>% filter(MIM_CO < 100)
+# plot(df_test$beta_r, df_test$MIM_CO) #crazy vales near 1.2
+# plot(df$beta_k, df$MIM_CO)
+# plot(df_730$beta_k, df_730$LIT_PerLoss) #general increase with increased beta
+# plot(df$beta_r, df$beta_k)
 
 ###
 #cost functions
 ###
-#for each run number calculate initial LIT_tot, make that a column, filter to the last day (730) and then subtract that value from that column for percent loss
-df$SITE.rn = paste(df$SITE, df$run_num, sep = "")
-LIT_init <- df %>% filter(DAY == 10) %>% mutate(LITi = LITBAG_tot) %>% select(SITE.rn, LITi) 
-boxplot(LIT_init$LITi)
-df <- df %>% left_join(LIT_init, by = "SITE.rn") 
-df_730 <- df %>% filter(DAY==730) %>% mutate(LIT_PerLoss = ((LITi - LITBAG_tot)/LITi)*100) #(sample - recovered)/sample *100
-boxplot(df_730$LIT_PerLoss) #looks reasonable
-#more accurate cost function! Test this tomorrow!
+
+#data for litter mass loss cost function
 Field_LML <- read.csv("Example_simulations/Data/Litter_decomp_all.csv")
-LML_sum2 <- Field_LML  %>% group_by(site, time.point) %>% drop_na(percent.loss.litter) %>% mutate(percent.loss.C = (percent.loss.litter/2)*100) %>% 
-  summarize(mean.ML = mean(percent.loss.C),
-            n = n(),
-            sd = sd(percent.loss.C/2),
-            SE = sd/sqrt(n),
-            lci.ML = mean.ML - qt(1 - ((1 - 0.95) / 2), n - 1) * SE,
-            uci.ML = mean.ML + qt(1 - ((1 - 0.95) / 2), n - 1) * SE,
+LML_sum2 <- Field_LML  %>% group_by(site, time.point) %>% drop_na(percent.loss.litter) %>% summarize(mean.ML = mean(percent.loss.litter*100),
+            n.ML = n(),
+            sd.ML = sd(percent.loss.litter*100),
+            SE = sd.ML/sqrt(n.ML),
+            lci.ML = mean.ML - qt(1 - ((1 - 0.95) / 2), n.ML - 1) * SE,
+            uci.ML = mean.ML + qt(1 - ((1 - 0.95) / 2), n.ML - 1) * SE,
             doy = mean(days_elapsed)) %>% mutate(doy=round(doy, digits=0))
-FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% select(time.point,SITE.DAY, mean.ML)
+FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% select(time.point,SITE.DAY, mean.ML, sd.ML, n.ML)
 LIT_init <- df %>% mutate(SITE.rn = paste(df$SITE, df$run_num, sep = "")) %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% select(SITE.rn, LITi)
 df_LML <- df %>% mutate(SITE.rn = paste(df$SITE, df$run_num, sep = "")) %>% left_join(LIT_init, by = "SITE.rn")
 df_LML <- df_LML %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
-#bringing in empirical comparison data
+#data for microbial functional group cost function
 #r:K/C:O
 MSBio_micfg <- read.csv("Example_simulations/Data/MSBio_FuncGroups_AllSites_prelim.csv")
 df <- MSBio_micfg %>% filter(material == "soil") %>% mutate(SITE = site) %>% group_by(SITE)  %>% summarise(mean.rK = mean(r_K), n.rK = n(), sd.rK = sd(r_K), SE = sd.rK/sqrt(n.rK), 
@@ -59,17 +55,7 @@ df <- MSBio_micfg %>% filter(material == "soil") %>% mutate(SITE = site) %>% gro
                                                                                                            lci.CO = mean.CO - qt(1 - ((1 - 0.95) / 2), n.CO - 1) * SE,
                                                                                                            uci.CO = mean.CO + qt(1 - ((1 - 0.95) / 2), n.CO - 1) * SE) %>%
   select(SITE, mean.CO, n.CO, sd.CO, lci.CO, uci.CO) %>% inner_join(df, by = "SITE")
-#litter mass loss
-#compare to field litter mass CARBON (divide by 2) loss - currently imperfect since running model for two years but time point 2 is at various years - may need to customize model output for each site!
-Field_LML <- read.csv("Example_simulations/Data/Litter_decomp_all.csv")
-df_730 <- Field_LML %>% filter(time.point==2) %>% drop_na(percent.loss.litter) %>% mutate(SITE=site) %>%group_by(SITE)%>% summarize(mean.ML = mean(percent.loss.litter/2),
-                                                                                                                         n.ML = n(),
-                                                                                                                         sd.ML = sd(percent.loss.litter/2),
-                                                                                                                         SE.ML = sd.ML/sqrt(n.ML),
-                                                                                                                         lci.ML = mean.ML - qt(1 - ((1 - 0.95) / 2), n.ML - 1) * SE.ML,
-                                                                                                                         uci.ML = mean.ML + qt(1 - ((1 - 0.95) / 2), n.ML - 1) * SE.ML,
-                                                                                                                         doy = mean(days_elapsed)) %>%
-  select(SITE, mean.ML, n.ML, sd.ML, lci.ML, uci.ML) %>% inner_join(df_730, by = "SITE")
+
 #estimating cost
 #Derek's 2022 paper uses RMSE which only accounts for differences and not errors
 #consider using maximum likelihood estimation instead? See Richardson and Hollinger, 2005 & Keenan et al., 2011
@@ -88,33 +74,156 @@ hist(MSBio_micfg$perc_decomp_T2) #very normal
 df$cost.rK.2 <- abs(((df$mean.rK- df$MIM_CO)/ df$sd.rK)/df$n.rK) #a few runs have huge costs
 df$cost.CO.2 <- abs(((df$mean.CO- df$MIM_CO)/ df$sd.CO)/df$n.CO) #a few runs have huge costs
 #with litter mass loss also accounted for - sum of above and LML version divided by 2(for number of data streams used, also Keenan et al., 2011)
-df_730$cost.ML <-abs(((df_730$mean.ML- df_730$LIT_PerLoss)/ df_730$sd.ML)/df_730$n.ML)
-boxplot(df_730$cost.ML)
-df <- df_730 %>% select(SITE.rn, cost.ML) %>% right_join(df, by="SITE.rn")
+df_LML$cost.ML <-abs(((df_LML$mean.ML- df_LML$LIT_PerLoss)/ df_LML$sd.ML)/df_LML$n.ML)
+boxplot(df_LML$cost.ML) #really good!
+df$SITE.rn <- paste(df$SITE, df$run_num, sep = ".")
+df <- df_LML %>% mutate(SITE.rn = paste(SITE, run_num, sep = ".")) %>% select(SITE.rn, cost.ML) %>% right_join(df, by="SITE.rn")
 df$cost.rK.3 <- (abs(((df$mean.rK- df$MIM_CO)/ df$sd.rK)/df$n.rK) + df$cost.ML)/2
 df$cost.CO.3 <- (abs(((df$mean.CO- df$MIM_CO)/ df$sd.CO)/df$n.CO) + df$cost.ML)/2
 boxplot(df$cost.rK.3)
 boxplot(df$cost.CO.3)
 
-#looking at cost
-hist(df$cost.rK)
-hist(df$cost.CO)
-df %>% filter(cost.rK < 100) %>% ggplot(aes(y=cost.rK)) + geom_boxplot() +ggtitle("Absolute value of the difference\nin predicted and obs") +theme_bw(base_size = 20)
-df %>% filter(cost.CO < 100) %>% ggplot(aes(y=cost.CO)) + geom_boxplot() +ggtitle("Absolute value of the difference\nin predicted and obs") +theme_bw(base_size = 20)
-df %>% filter(cost.rK.2 < 100) %>% ggplot(aes(y=cost.rK.2)) + geom_boxplot() +ggtitle("Error and sample size weighted\ndifference between predicted & obs") +theme_bw(base_size = 20)
-df %>% filter(cost.CO.2 < 100) %>% ggplot(aes(y=cost.CO.2)) + geom_boxplot() +ggtitle("Error and sample size weighted\ndifference between predicted & obs") +theme_bw(base_size = 20)
-#cost vs multiplier
-df %>% filter(cost.rK < 10) %>% ggplot(aes(x=CUE_x, y=cost.rK, group = CUE_x)) + geom_boxplot() + ggtitle("All sites cost (<10) with obs r:K vs CUE multiplier") #higher CUE generally lower cost #filter(run_num != 5) %>%
-df %>%  filter(cost.rK < 10) %>% ggplot(aes(x=Tau_x, y=cost.rK, group = Tau_x)) + geom_boxplot() + ggtitle("All sites cost (<10) with obs r:K vs Tau multiplier") #lowest tau lowest cost
-df %>%  filter(cost.CO < 100) %>% ggplot(aes(x=CUE_x, y=cost.CO, group = CUE_x)) + geom_boxplot() #higher CUE generally lower cost
-df %>% filter(cost.CO < 100) %>% ggplot(aes(x=Tau_x, y=cost.CO, group = Tau_x)) + geom_boxplot() #lowest tau lowest cost
-df %>% filter(run_num == 10) %>% ggplot(aes(x=DAY, y=cost.rK)) + geom_point() #cost doesn't vary over time
-#cool seems feasible but might need to do some sort of cleaning to get rid of unrealistic values
-df %>% filter(MIM_CO < 100) %>% ggplot(aes(y=MIM_CO, x=CUE_x)) +geom_point() +ggtitle("CUE_x multiplier vs r:K for CUE_x-only MC of 100 runs") #r:K increases as CUE_x increases
-df %>% filter(MIM_CO < 100) %>% ggplot(aes(y=MIM_CO, x=CUE_k)) +geom_point() +ggtitle("CUE_k multiplier vs r:K for CUE_r+CUE_k MC of 100 runs")
-#library(plotly)
-df_lowrK <- df %>% filter(MIM_CO < 100)
-plot_ly(df_lowrK, x = ~CUE_r, y = ~MIM_CO, z = ~CUE_k)
+
+#####
+#cost as matching relative weight analysis or effect size
+#####
+
+
+#OPTION 1: cost as RWA - note when observational values are reasonably close, it may pick the same set of lowest parameter sets so no difference will be seen
+FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% select(time.point,SITE.DAY, mean.ML)
+LIT_init <- df %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% mutate(SITE.rn = paste(SITE,run_num, sep="")) %>% select(SITE.rn, LITi)
+boxplot(LIT_init$LITi)
+df <- df %>% mutate(SITE.rn = paste(SITE,run_num, sep="")) %>% left_join(LIT_init, by = "SITE.rn")
+df_LML2 <- df %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
+df_analysis <- df_LML2 %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>%
+  filter(time.point==2)
+#logical checks
+df_check <- df_analysis %>% filter(MICrK > 0.01) %>%
+  filter(MICrK < 100) %>%
+  filter(MIC/SOC > 0.0001) %>%
+  filter(MIC/SOC < 0.40) 
+#relative weights for each run
+MIM_rwa <- data.frame()
+for (i in 1:5000) {
+  df_rwa <- filter(df_check, run_num==i)
+  rwa_mod <- rwa(df_rwa, "LIT_PerLoss", c("TSOI", "W_SCALAR", "LIG_N", "MICrK"), applysigns = TRUE, plot = FALSE)
+  rwa <- as.data.frame(rwa_mod$result)
+  rwa$run_num <- i
+  MIM_rwa <- rbind(MIM_rwa,rwa)
+}
+#select weights that best match observation weights- create cost function for weights
+#create dataframe of obs RWA - here using RWAs generated with C:O from Averill et al
+Variables = c("TSOI", "W_SCALAR", "LIG_N", "MICrK") #matching mdoel names
+obs_rw = c(11.2, 11.9, -63.2, -13.6) #with W_SCALAR
+#obs_rw = c(19.1, 12.1, -55.8, -13) #with MAP
+obs_rwa <- data.frame(Variables, obs_rw)
+#note that for next line df_LML$cost.ML comes from higher up code
+MIM_rwa2 <- df_LML %>% filter(time.point == 2) %>% group_by(run_num) %>% summarise(mean_cost_ML = mean(cost.ML))%>% right_join(MIM_rwa, by="run_num")
+RWA_cost <- MIM_rwa2 %>% inner_join(obs_rwa, by="Variables") %>% mutate(rw.dif = Sign.Rescaled.RelWeight - obs_rw) %>% 
+  mutate(cost2 = (abs(rw.dif)+mean_cost_ML)/2) %>% mutate(rel.cost = (cost2/abs(obs_rw))*100)
+#low cost based on top models
+#RWA_low.cost <- RWA_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(cost2)) %>% slice_min(mean_dif, n=100)
+#low cost based on relative cost value
+RWA_low.cost <- RWA_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(rel.cost)) %>% filter(mean_dif<75)
+test <- RWA_low.cost %>% left_join(RWA_cost, by="run_num") #%>% left_join(rand_params, by="run_num")
+test2 <- test %>% select(run_num, Tau_x, CUE_x, vMOD_x, kMOD_x) %>% pivot_longer(2:5, names_to = "Multiplier", values_to = "value")
+#ridge plots for parameter mulitpliers
+Params_rwa <- ggplot(test2, aes(x = value, y=Multiplier, group=Multiplier, fill=Multiplier))+
+  geom_density_ridges(scale = 2) +
+  scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
+  scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
+  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
+  theme_ridges() +
+  scale_fill_brewer(palette = "Oranges") +
+  labs(title="Parameter multipliers for 30 lowest cost runs out of 100") +#,
+  #subtitle="n=200 lowest cost parameter sets") +
+  theme(legend.position = "none") #removes the legend
+Params_rwa
+#ridge plots for cost
+Cost_rwa <- ggplot(test, aes(x = rel.cost, y=Variables, group=Variables, fill=Variables))+
+  geom_density_ridges(scale = 1, rel_min_height=0.01) +
+  scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
+  scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
+  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
+  theme_ridges() +
+  scale_fill_brewer(palette = "Oranges") +
+  labs(title="Percent relative cost by variable for lowest mean cost by run number") +#,
+  #subtitle="n=200 lowest cost parameter sets") +
+  theme(legend.position = "none") #removes the legend
+Cost_rwa
+test %>% group_by(Variables) %>% summarise(RW.mean = mean(Sign.Rescaled.RelWeight)) %>% ggplot(aes(x=Variables, y=RW.mean)) + 
+  geom_bar(stat="identity", fill="blue") + coord_flip() + geom_text(aes(label=round(RW.mean, digits=1)), color="red", size=7) +theme_bw(base_size = 16)
+
+#OPTION 2: cost as difference in effect size
+FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% select(time.point,SITE.DAY, mean.ML)
+LIT_init <- df %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% mutate(SITE.rn = paste(SITE,run_num, sep="")) %>% select(SITE.rn, LITi)
+boxplot(LIT_init$LITi)
+df <- df %>% mutate(SITE.rn = paste(SITE,run_num, sep="")) %>% left_join(LIT_init, by = "SITE.rn")
+df_LML2 <- df %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
+df_analysis <- df_LML2 %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>%
+  filter(time.point==2)
+#logical checks
+df_check <- df_analysis %>% filter(MICrK > 0.01) %>%
+  filter(MICrK < 100) %>%
+  filter(MIC/SOC > 0.0001) %>%
+  filter(MIC/SOC < 0.40) 
+#effect sizes for each run
+MIM_ES <- data.frame()
+for (i in 1:100) {
+  df_ES <- filter(df_check, run_num==i)
+  #Obs_ES_mod <- lmer(LIT_PerLoss ~ TSOI+W_SCALAR+LIG_N+MICrK+(1|SITE), data = df_ES)
+  #Obs_ES <- as.data.frame(fixef(Obs_ES_mod)) #fixed effects coefficients as effect size
+  Obs_ES_mod <- lm(LIT_PerLoss ~ TSOI+W_SCALAR+LIG_N+MICrK, data = df_ES)
+  Obs_ES <- as.data.frame(Obs_ES_mod$coefficients) #fixed effects coefficients as effect size
+  Obs_ES$Vars <- rownames(Obs_ES)
+  colnames(Obs_ES)[1] <- "value"
+  Obs_ES <- Obs_ES[-1, ]
+  Obs_ES$mult <- ifelse(Obs_ES$value <0, -1, 1)
+  Obs_ES$rel_ES <- (abs(Obs_ES$value)/sum(abs(Obs_ES$value))) * 100 * Obs_ES$mult
+  Obs_ES$run_num <- i
+  MIM_ES <- rbind(MIM_ES, Obs_ES)
+}
+#select effect sizes that best match observation weights- create cost function for weights
+#create dataframe of obs RWA - here using RWAs generated with C:O from Averill et al
+Vars = c("TSOI", "W_SCALAR", "LIG_N", "MICrK") #matching mdoel names
+obs_ES = c(1.7, 88, -4.4, -5.9) #for observational data with W_SCALAR
+#obs_ES = c(20.9, 0.1, -35.4, -43.6) #for observational data with MAP
+obs_ES_df <- data.frame(Vars, obs_ES)
+#note that for next line df_LML$cost.ML comes from higher up code
+MIM_ES2 <- df_LML %>% filter(time.point == 2) %>% group_by(run_num) %>% summarise(mean_cost_ML = mean(cost.ML))%>% right_join(MIM_ES, by="run_num")
+ES_cost <- MIM_ES2 %>% inner_join(obs_ES_df, by="Vars") %>% mutate(ES.dif = rel_ES - obs_ES) %>% 
+  mutate(cost2 = (abs(ES.dif)+mean_cost_ML)/2) %>% mutate(rel.cost = (cost2/abs(obs_ES))*100)
+#low cost based on defined number of lowest cost parameter sets 
+ES_low.cost <- ES_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(cost2)) %>% slice_min(mean_dif, n=50)
+#low cost based on relative cost value - doesn't work well because W_SCALAR is so low
+#ES_low.cost <- ES_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(rel.cost)) %>% filter(mean_dif<200)
+test <- ES_low.cost %>% left_join(ES_cost, by="run_num") #%>% left_join(rand_params, by="run_num")
+test2 <- test %>% select(run_num, Tau_x, CUE_x, vMOD_x, kMOD_x) %>% pivot_longer(2:5, names_to = "Multiplier", values_to = "value")
+Params_ES <- ggplot(test2, aes(x = value, y=Multiplier, group=Multiplier, fill=Multiplier))+
+  geom_density_ridges(scale = 2) +
+  scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
+  scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
+  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
+  theme_ridges() +
+  scale_fill_brewer(palette = "Oranges") +
+  labs(title="Parameter multipliers for 30 lowest cost runs out of 100") +#,
+  #subtitle="n=200 lowest cost parameter sets") +
+  theme(legend.position = "none") #removes the legend
+Params_ES
+#ridge plots for cost
+Cost_rwa <- ggplot(test, aes(x = cost2, y=Vars, group=Vars, fill=Vars))+
+  geom_density_ridges(scale = 1, rel_min_height=0.01) +
+  scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
+  scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
+  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
+  theme_ridges() +
+  scale_fill_brewer(palette = "Oranges") +
+  labs(title="Cost of lowest 50 cost p-sets by variable") +#,
+  #subtitle="n=200 lowest cost parameter sets") +
+  theme(legend.position = "none") #removes the legend
+Cost_rwa
+test %>% group_by(Vars) %>% summarise(ES.mean = mean(rel_ES)) %>% ggplot(aes(x=Vars, y=ES.mean)) + 
+  geom_bar(stat="identity", fill="blue") + coord_flip() + geom_text(aes(label=round(ES.mean, digits=1)), color="red", size=7) +theme_bw(base_size = 16)
 
 
 ### Ftn to find best psets (this is an objective function?)
@@ -144,7 +253,7 @@ best_data <- function(df, best_n) {
 
 ### Collect all the best psets by site
 sites <- unique(df$SITE)
-df$cost <- df$cost.rK.3
+df$cost <- df$cost.CO.3
 top_df <- NULL
 for(i in 1:length(sites)) {
   df1 <- best_data(df = df %>% filter(SITE == sites[i]), best_n = 30)
@@ -155,8 +264,6 @@ for(i in 1:length(sites)) {
 #putting in order of MAT
 MAT_order <- c("TREE", "BART", "HARV", "GRSM", "SERC", "TALL", "LENO")
 top_df$SITE <- factor(top_df$SITE, levels=MAT_order, labels=MAT_order)
-
-plot(top_df$beta_r, top_df$beta_k)
 
 pCOST <- ggplot(top_df, aes(x = cost, y = SITE, fill=SITE, group=SITE)) +
   geom_density_ridges(scale = 2) +
@@ -209,10 +316,10 @@ pTAU
 #comparing multipliers with environmental data
 #linear models
 #top_df_envi <- top_df %>% inner_join(data, by= "SITE")
-CUE_mod <- lm(CUE_x ~ TSOI + grav_moisture + LIG_N, data = top_df)
+CUE_mod <- lm(CUE_x ~ TSOI + W_SCALAR + LIG_N, data = top_df)
 plot(CUE_mod) #seems fine
 Anova(CUE_mod, type=3) #all sig
-ggplot(top_df, aes(x=grav_moisture, y=CUE_x, fill=SITE)) + geom_boxplot() #no clear relationships with any envi variable
+ggplot(top_df, aes(x=TSOI, y=CUE_x, fill=SITE)) + geom_boxplot() #no clear relationships with any envi variable
 Tau_mod <- lm(Tau_x ~ TSOI + GRAV_MOISTURE + LIG_N, data = top_df_envi)
 plot(Tau_mod) #seems fine
 Anova(Tau_mod, type=3) #all sig
