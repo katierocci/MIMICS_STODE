@@ -48,6 +48,8 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
   sim_year = 0
   i = 1
 
+  #print(dailyInput[44,4]) #this works so dataframe is getting into code which is good!
+  
   for (d in 1:nday)  { 
     # For recalc of Tpars from daily forcing data
     if (all(!is.na(dailyInput))) {

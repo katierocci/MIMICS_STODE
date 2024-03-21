@@ -9,3 +9,6 @@ Tau_MULT_default <- Tau_MULT
 aV_default <- aV
 vMOD_default <- vMOD
 kMOD_default <- kMOD
+fmet_p_default <- fmet_p
+tau_r_default <- tau_r
+tau_K_default <- tau_K

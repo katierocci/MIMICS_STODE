@@ -6,15 +6,19 @@ library(gridExtra)
 library(car)
 library(lmerTest)
 library(rwa)
+library(ranger)
+library(caTools)
+library(vip)
+
 
 
 #bringing input data together with output data
 #df <- readRDS("C:/github/MIMICS_MSBio/Cheyenne_HPC/HPC_output/MSBio_MIM_MC_runs-1e+05_20221028_112647_.rds")
-MC_MIMICS <- readRDS('~/Postdoc/MIMICS_STODE/Analysis/MC_output/MSBio_MC_5000_20240216_203530_.rds')
+#MC_MIMICS <- readRDS('~/Postdoc/MIMICS_STODE/Analysis/MC_output/MSBio_MC_5000_20240216_203530_.rds')
 df <- MC_MIMICS
 #rand_params <- readRDS('Cheyenne_HPC/July 2023/MIMICS_MSBio_KR/MC_output/MSBio_RP_1e+05_20230728_132810_Tc.rds')
 df <- left_join(MC_MIMICS, data, by = "SITE") #MC output has to be first for CO2 rows below to be right
-#df <- left_join(df, rand_params, by = "run_num") #don't have random parameters )':
+df <- left_join(df, rand_params, by = "run_num") #don't have random parameters )':
 #df$CO2_of_tot <- rowSums(df[,11:12])/rowSums(df[,4:12])
 df$MIM_CO <- as.numeric(df$MICr)/as.numeric(df$MICk)
 df$MIC_SOC <- (df$MICr+df$MICk)/(df$SOMc+df$SOMa+df$MICr+df$MICk)
@@ -26,6 +30,13 @@ df$LITBAG_tot <- df$LITBAGm + df$LITBAGs
 # plot(df$beta_k, df$MIM_CO)
 # plot(df_730$beta_k, df_730$LIT_PerLoss) #general increase with increased beta
 # plot(df$beta_r, df$beta_k)
+#df2 <- filter(df, LITs<2.5)
+#plot(df2$fM_x, df2$LITs) #very little effect on LITs but clear relationship with LITm
+#plot(df2$MICk, df2$LITs) #LITs is higher with lower MICk so that makes sense
+#plot(df2$fM_x, df2$MICk) #MICk increasing with lower fMET so that makes sense - maybe the influence on MICk is stronger than that on LITs?
+#plot(df2$fM_x, df2$SOMc) #SOMc also increasing with lower fMET which also makes sense
+#plot(df2$SOMc, df2$LITs) #LITs is higher with lower SOMc so that makes sense
+#plot(df2$fM_x, (df2$MICr+df2$MICk)) #shallow negative slope which makes sense
 
 ###
 #cost functions
@@ -42,8 +53,9 @@ LML_sum2 <- Field_LML  %>% group_by(site, time.point) %>% drop_na(percent.loss.l
             doy = mean(days_elapsed)) %>% mutate(doy=round(doy, digits=0))
 FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% select(time.point,SITE.DAY, mean.ML, sd.ML, n.ML)
 LIT_init <- df %>% mutate(SITE.rn = paste(df$SITE, df$run_num, sep = "")) %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% select(SITE.rn, LITi)
-df_LML <- df %>% mutate(SITE.rn = paste(df$SITE, df$run_num, sep = "")) %>% left_join(LIT_init, by = "SITE.rn")
-df_LML <- df_LML %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
+df_LML_all <- df %>% mutate(SITE.rn = paste(df$SITE, df$run_num, sep = "")) %>% left_join(LIT_init, by = "SITE.rn") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
+df_LML <- df_LML_all %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% right_join(FieldData, by="SITE.DAY") #%>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
+
 #data for microbial functional group cost function
 #r:K/C:O
 MSBio_micfg <- read.csv("Example_simulations/Data/MSBio_FuncGroups_AllSites_prelim.csv")
@@ -60,73 +72,172 @@ df <- MSBio_micfg %>% filter(material == "soil") %>% mutate(SITE = site) %>% gro
 #Derek's 2022 paper uses RMSE which only accounts for differences and not errors
 #consider using maximum likelihood estimation instead? See Richardson and Hollinger, 2005 & Keenan et al., 2011
 #initial cost functions
-df$cost.rK <- abs(df$MIM_CO - df$mean.rK) 
-df$cost.CO <- abs(df$MIM_CO - df$mean.CO)
-boxplot(df$cost.rK)
-#alternate cost functions
-#checking normality and variance assumptions of obs
-hist(MSBio_micfg$r_K) #very skewed, regardless if you cutoff outliers
-hist(MSBio_micfg$C_O) #very skewed, regardless if you cutoff outliers
-hist(MSBio_micfg$perc_decomp_T1) #pretty normal
-hist(MSBio_micfg$perc_decomp_T2) #very normal
-#skew means these data don't fit the classic MLE assumptions of normality
-#trying Keenan et al 2012 cost function with error
-df$cost.rK.2 <- abs(((df$mean.rK- df$MIM_CO)/ df$sd.rK)/df$n.rK) #a few runs have huge costs
-df$cost.CO.2 <- abs(((df$mean.CO- df$MIM_CO)/ df$sd.CO)/df$n.CO) #a few runs have huge costs
+# df$cost.rK <- abs(df$MIM_CO - df$mean.rK) 
+# df$cost.CO <- abs(df$MIM_CO - df$mean.CO)
+# boxplot(df$cost.rK)
+# #alternate cost functions
+# #checking normality and variance assumptions of obs
+# hist(MSBio_micfg$r_K) #very skewed, regardless if you cutoff outliers
+# hist(MSBio_micfg$C_O) #very skewed, regardless if you cutoff outliers
+# hist(MSBio_micfg$perc_decomp_T1) #pretty normal
+# hist(MSBio_micfg$perc_decomp_T2) #very normal
+# #skew means these data don't fit the classic MLE assumptions of normality
+# #trying Keenan et al 2012 cost function with error
+# df$cost.rK.2 <- abs(((df$mean.rK- df$MIM_CO)/ df$sd.rK)/df$n.rK) #a few runs have huge costs
+# df$cost.CO.2 <- abs(((df$mean.CO- df$MIM_CO)/ df$sd.CO)/df$n.CO) #a few runs have huge costs
 #with litter mass loss also accounted for - sum of above and LML version divided by 2(for number of data streams used, also Keenan et al., 2011)
 df_LML$cost.ML <-abs(((df_LML$mean.ML- df_LML$LIT_PerLoss)/ df_LML$sd.ML)/df_LML$n.ML)
-boxplot(df_LML$cost.ML) #really good!
-df$SITE.rn <- paste(df$SITE, df$run_num, sep = ".")
-df <- df_LML %>% mutate(SITE.rn = paste(SITE, run_num, sep = ".")) %>% select(SITE.rn, cost.ML) %>% right_join(df, by="SITE.rn")
-df$cost.rK.3 <- (abs(((df$mean.rK- df$MIM_CO)/ df$sd.rK)/df$n.rK) + df$cost.ML)/2
-df$cost.CO.3 <- (abs(((df$mean.CO- df$MIM_CO)/ df$sd.CO)/df$n.CO) + df$cost.ML)/2
-boxplot(df$cost.rK.3)
-boxplot(df$cost.CO.3)
+# boxplot(df_LML$cost.ML) #really good!
+# df$SITE.rn <- paste(df$SITE, df$run_num, sep = ".")
+# df <- df_LML %>% mutate(SITE.rn = paste(SITE, run_num, sep = ".")) %>% select(SITE.rn, cost.ML) %>% right_join(df, by="SITE.rn")
+# df$cost.rK.3 <- (abs(((df$mean.rK- df$MIM_CO)/ df$sd.rK)/df$n.rK) + df$cost.ML)/2
+# df$cost.CO.3 <- (abs(((df$mean.CO- df$MIM_CO)/ df$sd.CO)/df$n.CO) + df$cost.ML)/2
+# boxplot(df$cost.rK.3)
+# boxplot(df$cost.CO.3)
 
 
 #####
-#cost as matching relative weight analysis or effect size
+#OAAT sensitivity analysis
 #####
 
+#LML
+df_T2 <- df_LML %>% filter(time.point==2)
+plot(df_T2$Tau_x, df_T2$LIT_PerLoss)
 
-#OPTION 1: cost as RWA - note when observational values are reasonably close, it may pick the same set of lowest parameter sets so no difference will be seen
-FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% select(time.point,SITE.DAY, mean.ML)
-LIT_init <- df %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% mutate(SITE.rn = paste(SITE,run_num, sep="")) %>% select(SITE.rn, LITi)
-boxplot(LIT_init$LITi)
-df <- df %>% mutate(SITE.rn = paste(SITE,run_num, sep="")) %>% left_join(LIT_init, by = "SITE.rn")
-df_LML2 <- df %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
-df_analysis <- df_LML2 %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>%
-  filter(time.point==2)
-#logical checks
-df_check <- df_analysis %>% filter(MICrK > 0.01) %>%
-  filter(MICrK < 100) %>%
-  filter(MIC/SOC > 0.0001) %>%
-  filter(MIC/SOC < 0.40) 
-#relative weights for each run
+#RWA & ES
+df_SA <- df_T2 %>% mutate(MICrK = MICr/MICk) %>% filter(MICrK < 100)
+low.rep <- as.data.frame(table(df_SA$run_num))
+low.rep2 <- low.rep %>% filter(Freq > 4) #need to have more sites than varaibles
+rn_final <- low.rep2$Var1
+df_SA2  <- df_SA %>% filter(run_num %in% rn_final)
+#RWA
 MIM_rwa <- data.frame()
-for (i in 1:5000) {
-  df_rwa <- filter(df_check, run_num==i)
+for (i in seq_along(rn_final)) {
+  df_rwa <- filter(df_SA2, run_num==rn_final[i])
   rwa_mod <- rwa(df_rwa, "LIT_PerLoss", c("TSOI", "W_SCALAR", "LIG_N", "MICrK"), applysigns = TRUE, plot = FALSE)
   rwa <- as.data.frame(rwa_mod$result)
   rwa$run_num <- i
   MIM_rwa <- rbind(MIM_rwa,rwa)
 }
+Variables = c("TSOI", "W_SCALAR", "LIG_N", "MICrK") #matching mdoel names
+obs_rw = c(18.5, 24.7, -50.5, -6.3) #with VWC
+obs_rwa <- data.frame(Variables, obs_rw)
+MIM_rwa2 <- df_LML %>% filter(time.point == 2) %>% group_by(run_num) %>% summarise(mean_cost_ML = mean(cost.ML))%>% right_join(MIM_rwa, by="run_num")
+RWA_SA <- MIM_rwa2 %>% inner_join(obs_rwa, by="Variables") %>%  mutate(rw.dif = Sign.Rescaled.RelWeight - obs_rw) %>% inner_join(rand_params, by="run_num")
+ggplot(data=RWA_SA, aes(x=Tau_x, y=rw.dif, color=Variables)) + geom_point(size=3) + theme_bw(base_size=16)
+#ES
+MIM_ES <- data.frame()
+for (i in seq_along(rn_final)) {
+  df_ES <- filter(df_SA2, run_num==rn_final[i])
+  #Obs_ES_mod <- lmer(LIT_PerLoss ~ TSOI+W_SCALAR+LIG_N+MICrK+(1|SITE), data = df_ES)
+  #Obs_ES <- as.data.frame(fixef(Obs_ES_mod)) #fixed effects coefficients as effect size
+  Obs_ES_mod <- lm(LIT_PerLoss ~ TSOI+W_SCALAR+LIG_N+MICrK, data = df_ES)
+  Obs_ES <- as.data.frame(Obs_ES_mod$coefficients) #fixed effects coefficients as effect size
+  Obs_ES$Vars <- rownames(Obs_ES)
+  colnames(Obs_ES)[1] <- "value"
+  Obs_ES <- Obs_ES[-1, ]
+  Obs_ES$mult <- ifelse(Obs_ES$value <0, -1, 1)
+  Obs_ES$rel_ES <- (abs(Obs_ES$value)/sum(abs(Obs_ES$value))) * 100 * Obs_ES$mult
+  Obs_ES$run_num <- i
+  MIM_ES <- rbind(MIM_ES, Obs_ES)
+}
+Vars = c("TSOI", "W_SCALAR", "LIG_N", "MICrK") #matching mdoel names
+obs_ES = c(28.1, 1.6, -41.5, -28.8) #with VWC
+obs_ES_df <- data.frame(Vars, obs_ES)
+MIM_ES2 <- df_LML %>% filter(time.point == 2) %>% group_by(run_num) %>% summarise(mean_cost_ML = mean(cost.ML))%>% right_join(MIM_ES, by="run_num")
+ES_SA <- MIM_ES2 %>% inner_join(obs_ES_df, by="Vars") %>%  mutate(ES.dif = rel_ES - obs_ES) %>% inner_join(rand_params, by="run_num")
+ggplot(data=ES_SA, aes(x=Tau_x, y=ES.dif, color=Vars)) + geom_point(size=3) + theme_bw(base_size=16)
+
+####################################
+
+#####
+#cost as matching relative weight analysis or effect size
+#####
+
+#filter for reasonable data
+#if including time varying data
+T2_DAY <- df_LML %>% filter(time.point==2) %>% mutate(T2.DAY = DAY) %>% select(SITE, T2.DAY) %>% distinct(SITE, .keep_all = TRUE) %>% filter(complete.cases(SITE,T2.DAY))
+T1_DAY <- df_LML %>% filter(time.point==1) %>% mutate(T1.DAY = DAY) %>% select(SITE, T1.DAY) %>% distinct(SITE, .keep_all = TRUE) %>% filter(complete.cases(SITE,T1.DAY))
+df_LML_RI <- df_LML_all %>% inner_join(T2_DAY, by = "SITE") %>% inner_join(T1_DAY, by = "SITE") %>% filter(DAY > 10 & DAY <= T2.DAY+10) #accounts for 10 days of spinup before starting simulation
+DI_2y <- rbind(DailyInput, DailyInput)
+DI_2y$DAY2 <- c(0:365, 0:365, 0:365, 0:364, 0:365, 0:365, 0:365, 366:731, 366:731, 366:731, 364:728, 366:731, 366:731, 366:731) 
+DI_analysis <- DI_2y %>% inner_join(T2_DAY, by = "SITE") %>% filter(DAY2 >10 & DAY2 <= T2.DAY) %>% mutate(SITE.DAY = paste(SITE, DAY2, sep = "."))
+df_analysis <- df_LML_RI %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>% 
+  mutate(SITE.DAY = paste(SITE, DAY, sep = ".")) %>% inner_join(DI_analysis, by="SITE.DAY") %>% mutate(T2.DAY = T2.DAY.x, LIG_N = LIG_N.y, W_SCALAR = W_SCALAR.y) %>%
+  select(SITE.x, DAY.x, T1.DAY, T2.DAY, LIT_PerLoss, MICrK, MIC, SOC,run_num, Tau_r, Tau_K, CUE_x, vMOD_x, MAT, LIG_N, W_SCALAR)
+#if only using one timepoint
+#df_analysis <- df_LML %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>%
+#  filter(time.point==2) %>% select(SITE, LIT_PerLoss,
+#                                   MICrK, MIC, SOC, run_num, Tau_r, Tau_K, CUE_x, vMOD_x,
+#                                   TSOI, LIG_N, W_SCALAR)
+#logical checks
+df_check <- df_analysis %>% filter(MICrK > 0.01) %>%
+  filter(MICrK < 100) %>%
+  filter(MIC/SOC > 0.0001) %>%
+  filter(MIC/SOC < 0.40) 
+
+#filter for LML
+#collect run numbers that fit percent loss from observations at time points 1 and 2
+df_rn1 <- df_check %>% filter(DAY.x == T1.DAY) %>% filter(LIT_PerLoss > 17 & LIT_PerLoss < 50) #highest and lowest values of confidence interval for time point 1
+LR.rn1 <- as.data.frame(table(df_rn1$run_num)) %>% filter(Freq > 4)
+df_rn2 <- df_check %>% filter(DAY.x == T2.DAY) %>% filter(LIT_PerLoss > 25 & LIT_PerLoss < 80) #highest and lowest values of confidence interval for time point 2
+LR.rn2 <- as.data.frame(table(df_rn2$run_num)) %>% filter(Freq > 4)
+#keep only run numbers that are in both dfs
+df_rn1.v <- as.vector(as.numeric(LR.rn1$Var1))
+df_rn2.v <- as.vector(as.numeric(LR.rn2$Var1))
+rn_final <- which(df_rn2.v %in% df_rn1.v)
+#filter check df to only have run numbers that fit litter mass loss
+df_check2 <- df_check %>% filter(run_num %in% rn_final)
+
+#filter for run numbers where less than 5 sites remain - already done above if using daily input!
+# low.rep <- as.data.frame(table(df_check2$run_num))
+# low.rep2 <- low.rep %>% filter(Freq > 4) #need to have more sites than varaibles
+# rn_final <- low.rep2$Var1
+# df_check3  <- df_check2 %>% filter(run_num %in% rn_final)
+
+#OPTION 1: cost as RWA - note when observational values are reasonably close, it may pick the same set of lowest parameter sets so no difference will be seen
+MIM_rwa <- data.frame()
+start.time.rwa <- Sys.time()
+for (i in seq_along(rn_final)) { 
+  df_rwa <- filter(df_check2, run_num==rn_final[i])
+  rwa_mod <- rwa(df_rwa, "LIT_PerLoss", c("MAT", "W_SCALAR", "LIG_N", "MICrK"), applysigns = TRUE, plot = FALSE)
+  rwa <- as.data.frame(rwa_mod$result)
+  rwa$run_num <- rn_final[i]
+  MIM_rwa <- rbind(MIM_rwa,rwa)
+}
+end.time.rwa <- Sys.time()
+time.rwa = end.time.rwa - start.time.rwa #round(end.time.rwa - start.time.rwa,2) #5 seconds
 #select weights that best match observation weights- create cost function for weights
 #create dataframe of obs RWA - here using RWAs generated with C:O from Averill et al
-Variables = c("TSOI", "W_SCALAR", "LIG_N", "MICrK") #matching mdoel names
-obs_rw = c(11.2, 11.9, -63.2, -13.6) #with W_SCALAR
-#obs_rw = c(19.1, 12.1, -55.8, -13) #with MAP
+Variables = c("MAT", "W_SCALAR", "LIG_N", "MICrK") #matching model names
+obs_rw = c(21.6, 47.7, -3.3, -26.9) #observational output from RWA with plot-level VWC and C:O
 obs_rwa <- data.frame(Variables, obs_rw)
 #note that for next line df_LML$cost.ML comes from higher up code
-MIM_rwa2 <- df_LML %>% filter(time.point == 2) %>% group_by(run_num) %>% summarise(mean_cost_ML = mean(cost.ML))%>% right_join(MIM_rwa, by="run_num")
-RWA_cost <- MIM_rwa2 %>% inner_join(obs_rwa, by="Variables") %>% mutate(rw.dif = Sign.Rescaled.RelWeight - obs_rw) %>% 
-  mutate(cost2 = (abs(rw.dif)+mean_cost_ML)/2) %>% mutate(rel.cost = (cost2/abs(obs_rw))*100)
+MIM_rwa2 <- df_LML %>% group_by(run_num) %>% summarise(mean_cost_ML = mean(cost.ML))%>% right_join(MIM_rwa, by="run_num") #%>% filter(time.point == 2)
+# #sequential cost on one varaible
+# RWA_rn <- MIM_rwa2 %>% inner_join(obs_rwa, by="Variables") %>% filter(Variables=='W_SCALAR' & Sign.Rescaled.RelWeight > -70) 
+#create tolerance table to employ cost function based on multiple variables
+#same order as variables, above
+var_upper = c(100, 100, 100, 40) #make uppers 100 if don't want upper bound
+var_lower = c(-5, -10, -50, -100) #make lowers -100 if don't want lower bound
+tol_table <- data.frame(Variables, var_lower, var_upper)
+RWA_rn <- MIM_rwa2 %>% inner_join(obs_rwa, by="Variables") %>% inner_join(tol_table, by="Variables") %>% 
+  filter(Sign.Rescaled.RelWeight < var_upper & Sign.Rescaled.RelWeight > var_lower)
+RWA_rn2 <- as.data.frame(table(RWA_rn$run_num)) %>% filter(Freq > 3) #ensurnig all varaibles are present in "ideal" parameter set
+RWA_rn.v <- RWA_rn2$Var1
+RWA_cost <- MIM_rwa2 %>% inner_join(obs_rwa, by="Variables") %>% mutate(rw.dif = Sign.Rescaled.RelWeight - obs_rw) %>% filter(run_num %in% RWA_rn.v)
+#same time cost
+#RWA_cost <- MIM_rwa2 %>% inner_join(obs_rwa, by="Variables") %>% mutate(rw.dif = Sign.Rescaled.RelWeight - obs_rw) %>% 
+#  mutate(cost2 = (abs(rw.dif)+mean_cost_ML)/2) %>% mutate(rel.cost = (cost2/abs(obs_rw))*100)
 #low cost based on top models
 #RWA_low.cost <- RWA_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(cost2)) %>% slice_min(mean_dif, n=100)
 #low cost based on relative cost value
-RWA_low.cost <- RWA_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(rel.cost)) %>% filter(mean_dif<75)
-test <- RWA_low.cost %>% left_join(RWA_cost, by="run_num") #%>% left_join(rand_params, by="run_num")
-test2 <- test %>% select(run_num, Tau_x, CUE_x, vMOD_x, kMOD_x) %>% pivot_longer(2:5, names_to = "Multiplier", values_to = "value")
+#RWA_low.cost <- RWA_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(rel.cost)) %>% filter(mean_dif<75)
+#sequential cost fucntions
+test <- RWA_cost %>% left_join(rand_params, by="run_num")
+#same time cost
+#test <- RWA_low.cost %>% left_join(RWA_cost, by="run_num") %>% left_join(rand_params, by="run_num")
+test2 <- test %>% select(run_num, Tau_r, Tau_K, CUE_x, vMOD_x) %>% pivot_longer(2:5, names_to = "Multiplier", values_to = "value")
 #ridge plots for parameter mulitpliers
 Params_rwa <- ggplot(test2, aes(x = value, y=Multiplier, group=Multiplier, fill=Multiplier))+
   geom_density_ridges(scale = 2) +
@@ -135,10 +246,11 @@ Params_rwa <- ggplot(test2, aes(x = value, y=Multiplier, group=Multiplier, fill=
   coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
   theme_ridges() +
   scale_fill_brewer(palette = "Oranges") +
-  labs(title="Parameter multipliers for 30 lowest cost runs out of 100") +#,
+  labs(title="Parameter multipliers for 38 best runs using RWA") +#,
   #subtitle="n=200 lowest cost parameter sets") +
   theme(legend.position = "none") #removes the legend
 Params_rwa
+RWA_sum <- test2 %>% group_by(Multiplier) %>% summarise(mean.mult = mean(value))
 #ridge plots for cost
 Cost_rwa <- ggplot(test, aes(x = rel.cost, y=Variables, group=Variables, fill=Variables))+
   geom_density_ridges(scale = 1, rel_min_height=0.01) +
@@ -155,50 +267,56 @@ test %>% group_by(Variables) %>% summarise(RW.mean = mean(Sign.Rescaled.RelWeigh
   geom_bar(stat="identity", fill="blue") + coord_flip() + geom_text(aes(label=round(RW.mean, digits=1)), color="red", size=7) +theme_bw(base_size = 16)
 
 #OPTION 2: cost as difference in effect size
-FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% select(time.point,SITE.DAY, mean.ML)
-LIT_init <- df %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% mutate(SITE.rn = paste(SITE,run_num, sep="")) %>% select(SITE.rn, LITi)
-boxplot(LIT_init$LITi)
-df <- df %>% mutate(SITE.rn = paste(SITE,run_num, sep="")) %>% left_join(LIT_init, by = "SITE.rn")
-df_LML2 <- df %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
-df_analysis <- df_LML2 %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>%
-  filter(time.point==2)
-#logical checks
-df_check <- df_analysis %>% filter(MICrK > 0.01) %>%
-  filter(MICrK < 100) %>%
-  filter(MIC/SOC > 0.0001) %>%
-  filter(MIC/SOC < 0.40) 
-#effect sizes for each run
 MIM_ES <- data.frame()
-for (i in 1:100) {
-  df_ES <- filter(df_check, run_num==i)
+start.time.es <- Sys.time()
+for (i in seq_along(rn_final)) {
+  df_ES <- filter(df_check2, run_num==rn_final[i])
   #Obs_ES_mod <- lmer(LIT_PerLoss ~ TSOI+W_SCALAR+LIG_N+MICrK+(1|SITE), data = df_ES)
   #Obs_ES <- as.data.frame(fixef(Obs_ES_mod)) #fixed effects coefficients as effect size
-  Obs_ES_mod <- lm(LIT_PerLoss ~ TSOI+W_SCALAR+LIG_N+MICrK, data = df_ES)
+  Obs_ES_mod <- lm(LIT_PerLoss ~ MAT+W_SCALAR+LIG_N+MICrK, data = df_ES)
   Obs_ES <- as.data.frame(Obs_ES_mod$coefficients) #fixed effects coefficients as effect size
   Obs_ES$Vars <- rownames(Obs_ES)
   colnames(Obs_ES)[1] <- "value"
   Obs_ES <- Obs_ES[-1, ]
   Obs_ES$mult <- ifelse(Obs_ES$value <0, -1, 1)
   Obs_ES$rel_ES <- (abs(Obs_ES$value)/sum(abs(Obs_ES$value))) * 100 * Obs_ES$mult
-  Obs_ES$run_num <- i
+  Obs_ES$run_num <- rn_final[i]
   MIM_ES <- rbind(MIM_ES, Obs_ES)
 }
+end.time.es <- Sys.time()
+time.es = round(end.time.es - start.time.es,2) #4 seconds
 #select effect sizes that best match observation weights- create cost function for weights
 #create dataframe of obs RWA - here using RWAs generated with C:O from Averill et al
-Vars = c("TSOI", "W_SCALAR", "LIG_N", "MICrK") #matching mdoel names
-obs_ES = c(1.7, 88, -4.4, -5.9) #for observational data with W_SCALAR
-#obs_ES = c(20.9, 0.1, -35.4, -43.6) #for observational data with MAP
+Vars = c("MAT", "W_SCALAR", "LIG_N", "MICrK") #matching mdoel names
+#obs_ES = c(28.1, 1.6, -41.5, -28.8) #with VWC
+obs_ES = c(13.7, 2.2, -2.4, -81.7) #with plot level C:O and soil VWC
 obs_ES_df <- data.frame(Vars, obs_ES)
 #note that for next line df_LML$cost.ML comes from higher up code
-MIM_ES2 <- df_LML %>% filter(time.point == 2) %>% group_by(run_num) %>% summarise(mean_cost_ML = mean(cost.ML))%>% right_join(MIM_ES, by="run_num")
-ES_cost <- MIM_ES2 %>% inner_join(obs_ES_df, by="Vars") %>% mutate(ES.dif = rel_ES - obs_ES) %>% 
-  mutate(cost2 = (abs(ES.dif)+mean_cost_ML)/2) %>% mutate(rel.cost = (cost2/abs(obs_ES))*100)
+MIM_ES2 <- df_LML %>% group_by(run_num) %>% summarise(mean_cost_ML = mean(cost.ML))%>% right_join(MIM_ES, by="run_num") #%>% filter(time.point == 2)
+#sequential cost on one variable
+#ES_rn <- MIM_ES2 %>% inner_join(obs_ES_df, by="Vars") %>% filter(Vars=='MAT' & rel_ES > 0)
+#create tolerance table to employ cost function based on multiple variables
+#same order as variables, above
+var_upper = c(100, 100, 100, 35) #make uppers 100 if don't want upper bound
+var_lower = c(-0.4, -65, -6, -100) #make lowers -100 if don't want lower bound
+tol_table <- data.frame(Vars, var_lower, var_upper)
+ES_rn <- MIM_ES2 %>% inner_join(obs_ES_df, by="Vars") %>% inner_join(tol_table, by="Vars") %>% 
+  filter(rel_ES < var_upper & rel_ES > var_lower)
+ES_rn2 <- as.data.frame(table(ES_rn$run_num)) %>% filter(Freq > 3) #ensurnig all varaibles are present in "ideal" parameter set
+ES_rn.v <- ES_rn2$Var1
+ES_cost <- MIM_ES2 %>% inner_join(obs_ES_df, by="Vars") %>% mutate(es.dif = rel_ES - obs_ES) %>% filter(run_num %in% ES_rn.v)
+#combined cost
+#ES_cost <- MIM_ES2 %>% inner_join(obs_ES_df, by="Vars") %>% mutate(ES.dif = rel_ES - obs_ES) %>% 
+#  mutate(cost2 = (abs(ES.dif)+mean_cost_ML)/2) %>% mutate(rel.cost = (cost2/abs(obs_ES))*100)
 #low cost based on defined number of lowest cost parameter sets 
-ES_low.cost <- ES_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(cost2)) %>% slice_min(mean_dif, n=50)
+#ES_low.cost <- ES_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(cost2)) %>% slice_min(mean_dif, n=50)
 #low cost based on relative cost value - doesn't work well because W_SCALAR is so low
 #ES_low.cost <- ES_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(rel.cost)) %>% filter(mean_dif<200)
-test <- ES_low.cost %>% left_join(ES_cost, by="run_num") #%>% left_join(rand_params, by="run_num")
-test2 <- test %>% select(run_num, Tau_x, CUE_x, vMOD_x, kMOD_x) %>% pivot_longer(2:5, names_to = "Multiplier", values_to = "value")
+#sequential cost
+test <- ES_cost %>% left_join(rand_params, by="run_num")
+#combined cost
+#test <- ES_low.cost %>% left_join(ES_cost, by="run_num") %>% left_join(rand_params, by="run_num")
+test2 <- test %>% select(run_num, Tau_r, Tau_K, CUE_x, vMOD_x) %>% pivot_longer(2:5, names_to = "Multiplier", values_to = "value")
 Params_ES <- ggplot(test2, aes(x = value, y=Multiplier, group=Multiplier, fill=Multiplier))+
   geom_density_ridges(scale = 2) +
   scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
@@ -206,10 +324,11 @@ Params_ES <- ggplot(test2, aes(x = value, y=Multiplier, group=Multiplier, fill=M
   coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
   theme_ridges() +
   scale_fill_brewer(palette = "Oranges") +
-  labs(title="Parameter multipliers for 30 lowest cost runs out of 100") +#,
+  labs(title="Parameter multipliers for 7 best runs using effect size") +#,
   #subtitle="n=200 lowest cost parameter sets") +
   theme(legend.position = "none") #removes the legend
 Params_ES
+ES_sum <- test2 %>% group_by(Multiplier) %>% summarise(mean.mult = mean(value))
 #ridge plots for cost
 Cost_rwa <- ggplot(test, aes(x = cost2, y=Vars, group=Vars, fill=Vars))+
   geom_density_ridges(scale = 1, rel_min_height=0.01) +
@@ -224,6 +343,68 @@ Cost_rwa <- ggplot(test, aes(x = cost2, y=Vars, group=Vars, fill=Vars))+
 Cost_rwa
 test %>% group_by(Vars) %>% summarise(ES.mean = mean(rel_ES)) %>% ggplot(aes(x=Vars, y=ES.mean)) + 
   geom_bar(stat="identity", fill="blue") + coord_flip() + geom_text(aes(label=round(ES.mean, digits=1)), color="red", size=7) +theme_bw(base_size = 16)
+
+
+#OPTION 3: random forest analysis
+MIM_rf <- data.frame()
+#start.time.rf <- Sys.time()
+for (i in seq_along(rn_final)) {
+  df_ES <- filter(df_check2, run_num==rn_final[i])
+#random forest
+#test and training data - using 75 train-25 test split like in Georgiou et al., 2021
+  MFG_rf <- as.data.frame(df_ES %>% select(LIT_PerLoss, MAT, W_SCALAR, LIG_N, MICrK) %>% na.omit(.))
+  split <- sample.split(MFG_rf, SplitRatio = 0.75)
+  data_train <- subset(MFG_rf, split == "TRUE")
+  data_test <- subset(MFG_rf, split == "FALSE")
+  ranger_train <- ranger(LIT_PerLoss ~ MAT + W_SCALAR + LIG_N + MICrK,
+                       data = MFG_rf,
+                       importance = 'impurity',
+                       mtry = 1)
+  Obs_rf <- as.data.frame(ranger_train$variable.importance) #fixed effects coefficients as effect size
+  Obs_rf$Vars <- rownames(Obs_rf)
+  colnames(Obs_rf)[1] <- "value"
+  Obs_rf$rel_rf <- (abs(Obs_rf$value)/sum(abs(Obs_rf$value))) * 100
+  Obs_rf$run_num <- rn_final[i]
+  MIM_rf <- rbind(MIM_rf, Obs_rf)
+}
+#end.time.rf <- Sys.time()
+#time.rf = round(end.time.rf - start.time.rf,2) #19seconds
+#select effect sizes that best match observation weights- create cost function for weights
+#create dataframe of obs RWA - here using RWAs generated with C:O from Averill et al
+Vars = c("MAT", "W_SCALAR", "LIG_N", "MICrK") #matching model names
+obs_rf = c(17.6, 33.8, 24.2, 24.5) #with plot level C:O and soil VWC
+obs_rf_df <- data.frame(Vars, obs_rf)
+#note that for next line df_LML$cost.ML comes from higher up code
+MIM_rf2 <- df_LML %>% group_by(run_num) %>% summarise(mean_cost_ML = mean(cost.ML))%>% right_join(MIM_rf, by="run_num") #%>% filter(time.point == 2)
+#create tolerance table to employ cost function based on multiple variables
+#same order as variables, above
+var_upper = c(30, 50, 30, 50) #make uppers 100 if don't want upper bound
+var_lower = c(10, 10, 10, 0) #make lowers 0 if don't want lower bound
+tol_table <- data.frame(Vars, var_lower, var_upper)
+rf_rn <- MIM_rf2 %>% inner_join(obs_rf_df, by="Vars") %>% inner_join(tol_table, by="Vars") %>% 
+  filter(rel_rf < var_upper & rel_rf > var_lower)
+rf_rn2 <- as.data.frame(table(rf_rn$run_num)) %>% filter(Freq > 3) #ensurnig all varaibles are present in "ideal" parameter set
+rf_rn.v <- rf_rn2$Var1
+rf_cost <- MIM_rf2 %>% inner_join(obs_rf_df, by="Vars") %>% mutate(rf.dif = rel_rf - obs_rf) %>% filter(run_num %in% rf_rn.v)
+test <- rf_cost %>% left_join(rand_params, by="run_num")
+test2 <- test %>% select(run_num, Tau_r, Tau_K, CUE_x, vMOD_x) %>% pivot_longer(2:5, names_to = "Multiplier", values_to = "value")
+Params_rf <- ggplot(test2, aes(x = value, y=Multiplier, group=Multiplier, fill=Multiplier))+
+  geom_density_ridges(scale = 2) +
+  scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
+  scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
+  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
+  theme_ridges() +
+  scale_fill_brewer(palette = "Oranges") +
+  labs(title="Parameter multipliers for 10 best runs using random forest") +#,
+  #subtitle="n=200 lowest cost parameter sets") +
+  theme(legend.position = "none") #removes the legend
+Params_rf
+#rf_sum <- test2 %>% group_by(Multiplier) %>% summarise(mean.mult = mean(value))
+#plot realtive vip
+test %>% group_by(Vars) %>% summarise(rf.mean = mean(rel_rf)) %>% ggplot(aes(x=Vars, y=rf.mean)) + 
+  geom_bar(stat="identity", fill="blue") + coord_flip() + geom_text(aes(label=round(rf.mean, digits=1)), color="red", size=7) +theme_bw(base_size = 16)
+
+
 
 
 ### Ftn to find best psets (this is an objective function?)

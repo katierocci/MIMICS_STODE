@@ -24,10 +24,25 @@ source("functions/MC_parameterization/set_parameter_defaults.R")
 #load site data
 MSBio <- read.csv("Example_simulations/Data/Site_annual_clim.csv")
 #match input data strucutre
-#AGNPP should be in gDW!! multiply by 2 here to remedy
-#don't have gravimetric soil moisture, just volumetric, assuming a BD of 1g/cm3 makes them equivalent - could be bad assumption given this is BD of leaves
-data <- MSBio %>% mutate(SITE = Site, ANPP = AGNPP_sum*2, TSOI = TSOI_mean, CLAY = PCT_CLAY_mean, lig_N = LIG_N, GWC = H2OSOI_mean*100, W_SCALAR=W_SCALAR_mean) %>%
+#AGNPP should be in gram dry weight! multiply by 2 here to remedy
+#if using soil moisture and not water scalar: we are using VWC and not GWC - assuming a BD of 1g/cm3 makes them equivalent but this assumption may be flawed
+data1 <- MSBio %>% mutate(SITE = Site, ANPP = AGNPP_sum*2, TSOI = TSOI_mean, CLAY = PCT_CLAY_mean, lig_N = LIG_N, GWC = H2OSOI_mean*100, W_SCALAR=W_SCALAR_mean) %>%
   select(SITE, ANPP, TSOI, CLAY, LIG, C, N, CN, LIG_N, GWC, W_SCALAR) 
+#replacing anomalously high ANPP values for OSBS and TALL based on NEON measurements
+MSBio2 <- data1
+NEON_GPP <- read.csv("Example_simulations/Data/NEON_GPP.csv")
+MSBio2$ANPP[MSBio2$SITE == "OSBS"] <- 547 + 0.18*NEON_GPP[6,2] #using relationship between NEON GPP and ANPP
+MSBio2$ANPP[MSBio2$SITE == "TALL"] <- 547 + 0.18*NEON_GPP[9,2] #using relationship between NEON GPP and ANPP 
+#filtering for sites with microbial data
+Mic_sites <- c("SERC","BART","TALL","TREE","LENO","HARV","GRSM")
+data_sites <- filter(MSBio2, SITE %in% Mic_sites)
+data <- data_sites
+
+#loading daily inputs and replacing TALL data to be more realistic
+DailyInput <- read.csv("Example_simulations/Data/DailyInput.csv")
+DailyInput$LITFALL[DailyInput$SITE == "TALL"] <- DailyInput$LITFALL[DailyInput$SITE == "TALL"]*0.663
+DailyInput$ANPP[DailyInput$SITE == "TALL"] <- sum(DailyInput$LITFALL[DailyInput$SITE == "TALL"])
+
 
 #MSBio litter bags based variation in NEON litter (not separated by species)
 MSBio_BAGS <- read.csv("Example_simulations/Data/NEON_MSB_LitVars.csv")
@@ -37,8 +52,8 @@ BAG_init_size <- 100
 BAGS <- MSBio_BAGS %>% select(Site, TYPE, CALC_MET)
 BAGS$BAG_LITm <- ((BAG_init_size * 1e3 / 1e4)/ depth) * BAGS$CALC_MET
 BAGS$BAG_LITs <- ((BAG_init_size * 1e3 / 1e4)/ depth) * (1-BAGS$CALC_MET) #initial litter = 0.1 because of unit conversions here
-#each litter with each site
-BAGS_mean <- BAGS %>% filter(TYPE == "mean")
+#each litter with each site and filtering for sites with microbial data
+BAGS_mean <- BAGS %>% filter(TYPE == "mean") %>% filter(Site %in% Mic_sites)
 #just one litter type
 #BAGS_BART <- BAGS %>% filter(Site == "BART" & TYPE == "mean")
 
@@ -52,18 +67,20 @@ MIM_runs <- 100
 
 ### Create random parameter dataframe
 ## Parameter range informed by range observed over 10+ MCMC analysis results
-rand_params <- data.frame( Tau_x = runif(MIM_runs, 0.3, 3),
-  # Tau_r = runif(MIM_runs, 0.3, 3),
-  # Tau_k = runif(MIM_runs, 0.3, 3)#,
-  CUE_x = runif(MIM_runs, 0.5, 1.4), 
-  # CUE_r = runif(MIM_runs, 0.5, 1.4),
+rand_params <- data.frame(#Tau_x = runif(MIM_runs, 0.3, 2), #original range: 0.3,3
+   Tau_r = runif(MIM_runs, 0.3, 2), #original range: 0.3,3
+   Tau_K = runif(MIM_runs, 0.3, 3),
+   CUE_x = runif(MIM_runs, 0.5, 1.1), #original range: 0.5,1.4
+  # CUE_r = runif(MIM_runs, 0.5, 1.4)#,
   # CUE_k = runif(MIM_runs, 0.5, 1.4)
   #Vslope_x = runif(MIM_runs, 0.5, 2)#,
   #Vint_x = runif(MIM_runs, 0.8, 1.3)
   #Kslope_x = runif(MIM_runs, 0.5, 2),
   #Kint_x = runif(MIM_runs, 0.5, 2)#,
-  vMOD_x = runif(MIM_runs, 0.5, 2),
-  kMOD_x = runif(MIM_runs, 0.5, 2)  
+  vMOD_x = runif(MIM_runs, 0.5, 2)#,
+  #kMOD_x = runif(MIM_runs, 0.5, 2),
+  #fM_x = runif(MIM_runs, 0.8, 1.3) #for overall multiplier
+  #fM_x = runif(MIM_runs, 0.1, 1.05) #for slope multiplier - by my calculations pretty close to max as is
 )
 
 rand_params$run_num <- seq(1,MIM_runs,1)
@@ -82,11 +99,16 @@ print(paste0("Start time: ", Sys.time()))
 start_time <- Sys.time()
 
 
+#STEADY STATE INPUT
 #below should take each row of the random parameters (a single run number) and run the MIMrepeat function for each row
 #if only doing a single litter type, change mapping function in LitBag_MIMICS_repeat
-MC_MIMICS <- rand_params %>% split(1:nrow(rand_params)) %>% future_map(~MIMrepeat(forcing_df = data, litBAG = BAGS_mean, rparams = .), .progress=TRUE) %>% 
-  bind_rows() 
+#MC_MIMICS <- rand_params %>% split(1:nrow(rand_params)) %>% future_map(~MIMrepeat(forcing_df = data, litBAG = BAGS_mean, rparams = .), .progress=TRUE) %>% 
+#  bind_rows() 
 
+#DAILY INPUT
+#below should take each row of the random parameters (a single run number) and run the MIMrepeat function for each row
+MC_MIMICS <- rand_params %>% split(1:nrow(rand_params)) %>% future_map(~MIMrepeat(forcing_df = data, litBAG = BAGS_mean, dailyInput = DailyInput, rparams = .), .progress=TRUE) %>% 
+  bind_rows()
 
 
 wall_time <- Sys.time() - start_time
