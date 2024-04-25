@@ -33,12 +33,14 @@ source("functions/RXEQ.R")
 ####
 
 #load site data
-MSBio <- read.csv("Example_simulations/Data/Site_annual_clim.csv")
+MSBio <- read.csv("Example_simulations/Data/Site_annual_clim_final.csv")
+#remove bottom rows if not using species specific litter
+MSBio <- MSBio[1:11,]
 #match input data structure
 #AGNPP should be in grams Dry Weight (gDW) not gC! multiply by 2 here to remedy
 #don't have gravimetric soil moisture, just volumetric, assuming a BD of 1g/cm3 makes them equivalent - could be bad assumption given this is BD of leaves
-MSBio2 <- MSBio %>% mutate(SITE = Site, ANPP = AGNPP_sum*2, TSOI = TSOI_mean, CLAY = PCT_CLAY_mean, lig_N = LIG_N, GWC = H2OSOI_mean*100, W_SCALAR=W_SCALAR_mean) %>%
-  select(SITE, ANPP, TSOI, CLAY, LIG, C, N, CN, LIG_N, GWC, W_SCALAR) 
+MSBio2 <- MSBio %>% mutate(SITE = Site, ANPP = AGNPP_sum*2, TSOI = TSOI_mean, CLAY = PCT_CLAY_mean, GWC = H2OSOI_mean*100, W_SCALAR=W_SCALAR_mean) %>%
+  select(SITE, ANPP, TSOI, CLAY, LIG_N, LIG_N_sp1, LIG_N_sp2, LIG_N_sp3, GWC, W_SCALAR, lci_SM_ratio, uci_SM_ratio) 
 #fixing TALL and OSBS ANPP
 NEON_GPP <- read.csv("Example_simulations/Data/NEON_GPP.csv")
 MSBio3 <- MSBio2
@@ -51,6 +53,21 @@ MSBio_sites <- filter(MSBio3, SITE %in% Mic_sites)
 DailyInput <- read.csv("Example_simulations/Data/DailyInput.csv")
 DailyInput$LITFALL[DailyInput$SITE == "TALL"] <- DailyInput$LITFALL[DailyInput$SITE == "TALL"]*0.663
 DailyInput$ANPP[DailyInput$SITE == "TALL"] <- sum(DailyInput$LITFALL[DailyInput$SITE == "TALL"])
+
+#checking relationship between soil moisture and W_Scalar
+# ggplot(DailyInput, aes(x=GWC, y=W_SCALAR, color=SITE, group=SITE)) + geom_point() +geom_smooth(method = "loess")
+# #mostly hump shaped curve but some sites don't reach downward part of curve and TREE is just mega weird
+# xx<-seq(0,80,0.0312378)
+# ggplot(DailyInput, aes(x=GWC, y=W_SCALAR)) + geom_point() +geom_smooth(method = "lm", formula = y~x + I(x^2), color="red")+
+#   #lines(x=xx,y=test$coef[3]*xx^2+test$coef[2]*xx+test$coef[1]) #not working! Try again Monday!
+# geom_line(aes(x=xx,y=test$coef[3]*xx^2+test$coef[2]*xx+test$coef[1]))
+#   #, col='blue
+# #if you include all sites there is broadly a hump shaped curve
+# y=DailyInput$W_SCALAR
+# x=DailyInput$GWC
+# test <- lm(y~x + I(x^2))
+# summary(test)
+# test$coef
 
 #additional code for: (1) determining ANPP multipliers for RALL and OSBS; (2) creating DailyInput file for all sites; (3) determining litterfall multiplier for TALL
 #(1)
@@ -79,77 +96,160 @@ DailyInput$ANPP[DailyInput$SITE == "TALL"] <- sum(DailyInput$LITFALL[DailyInput$
 # TALL_ANPP.adj <- -7.2 + 1.7*MSBio_sites[6,2]
 # TALL_mult <- TALL_ANPP.adj/test1[6,3] #0.663
 
-#Option 1: MSBio litter bags with just variation in NEON litter (not separated by species)
-MSBio_BAGS <- read.csv("Example_simulations/Data/NEON_MSB_LitVars.csv")
-
-#Option2: MSBio litter bags with leaf and litter chemistry combined
-# MSBio_BAGS <- read.csv("NEON_MSB_LeafChem.csv")
-# MSBio_BAGS <- MSBio_BAGS[,2:8]
-# #rename to match input
-# MSBio_BAGS2 <- MSBio_BAGS %>% mutate(Site = siteID, TYPE = taxonID, BAG_LIG = leaflig, BAG_N = leafN, BAG_CN = leafCN) %>%
-#   select(Site, TYPE, BAG_LIG, BAG_N, BAG_CN)
-# #add combined chem
-# COMBO_BAGS <- data.frame(Site = c("BART", 'GRSM', 'HARV', 'LENO', 'MLBS', 'OSBS', 'SCBI', 'SERC', 'TALL', 'TREE', 'UNDE'),
-#                          TYPE = rep("COMBO", 11),
-#                          BAG_LIG = MSBio2$LIG,
-#                          BAG_N = MSBio2$N,
-#                          BAG_CN = MSBio2$CN)
-# MSBio_BAGS3 <- rbind(MSBio_BAGS2, COMBO_BAGS)
 
 
+#load in MSBio litter bag chemistry
 ### changed to fMET calculation in STODE script here!! Note that the two options are only somewhat related but less negatives in STODE equation
-
-MSBio_BAGS$CALC_MET <- fmet_p[1] * (fmet_p[2] - fmet_p[3] * (MSBio_BAGS$BAG_LIG/MSBio_BAGS$BAG_N))
-MSBio_BAGS$CALC_MET[MSBio_BAGS$CALC_MET <0] = 0 #setting negatives to zero - might want to reconsider this for future runs, all strucutral seems pretty unlikely
-#MSBio_BAGS$CALC_N <- (1 / MSBio_BAGS$BAG_CN) / 2.5 * 100 #why calculating from CN and not N directly?
-#MSBio_BAGS$CALC_MET2 <- 0.85 - 0.013 * MSBio_BAGS$BAG_LIG/MSBio_BAGS$CALC_N #calculate fMET
+MSBio_BAGS <- MSBio_sites %>% select(SITE, LIG_N_sp1, LIG_N_sp2, LIG_N_sp3) %>% pivot_longer(2:4, names_to = "TYPE", values_to = "BAG_LIG_N")
+MSBio_BAGS$CALC_MET <- fmet_p[1] * (fmet_p[2] - fmet_p[3] * (MSBio_BAGS$BAG_LIG_N))
+MSBio_BAGS$CALC_MET[MSBio_BAGS$CALC_MET <0] = 0.01 #setting negatives to small number so 99% structural
 
 BAG_init_size <- 100
-BAGS <- MSBio_BAGS %>% select(Site, TYPE, CALC_MET)
-BAGS$BAG_LITm <- ((BAG_init_size * 1e3 / 1e4)/ depth) * BAGS$CALC_MET
-BAGS$BAG_LITs <- ((BAG_init_size * 1e3 / 1e4)/ depth) * (1-BAGS$CALC_MET) #initial litter = 0.1 because of unit conversions here 
+BAGS <- MSBio_BAGS %>% select(SITE, TYPE, CALC_MET)
+BAGS$BAG_LITm <- ((BAG_init_size * 1e3 / 1e4)/ depth) * BAGS$CALC_MET #g/m2 converted to mg/cm3
+BAGS$BAG_LITs <- ((BAG_init_size * 1e3 / 1e4)/ depth) * (1-BAGS$CALC_MET) 
+#initial litter = 0.33 because of unit conversions here
 
-#just mic sites
-BAGS_sites <- filter(BAGS, Site %in% Mic_sites)
 
 ####
 #run litterbag model 
 ####
 
 
-#Individual site example (SERC - row 8)
-#daily inputs all of the sudden giving NAs with no error message
-BAGS_TREE <- filter(BAGS_sites, Site == "TREE" & TYPE == "mean")
-BAGS_TREE <- BAGS_TREE[,2:5]
-BAGS_out_TREE_SS <- BAGS_TREE %>% split(1:nrow(BAGS_TREE)) %>% map(~ MIMICS_LITBAG(litBAG=.,
-                                                                           forcing_df=MSBio_sites[7,],
-                                                                           dailyInput = TREE_DI, 
-                                                                           nspin_yrs=2,
-                                                                           nspin_days=0,
-                                                                           litadd_day=10,
-                                                                           verbose=T)) %>% bind_rows()
+# #Individual site example (SERC - row 8)
+# BAGS_TREE <- filter(BAGS_sites, Site == "TREE" & TYPE == "mean")
+# BAGS_TREE <- BAGS_TREE[,2:5]
+# BAGS_out_TREE_SS <- BAGS_TREE %>% split(1:nrow(BAGS_TREE)) %>% map(~ MIMICS_LITBAG(litBAG=.,
+#                                                                            forcing_df=MSBio_sites[7,],
+#                                                                            dailyInput = TREE_DI, 
+#                                                                            nspin_yrs=2,
+#                                                                            nspin_days=0,
+#                                                                            litadd_day=10,
+#                                                                            verbose=T)) %>% bind_rows()
+# 
+# #all sites and all litters
+# BAGS_mean <- filter(BAGS_sites, TYPE=="mean")
+# BAGS_input <- split(BAGS_mean, 1:nrow(BAGS_mean))
+# forcing_input <- split(MSBio_sites, 1:nrow(MSBio_sites))
+# BAGS_out_AllSites <- map2(forcing_input, BAGS_input, ~MIMICS_LITBAG(forcing_df = .x, litBAG = .y, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T)) %>% bind_rows()
+# 
+# #all sites and all litters with daily input
+# #switch to loop since there isn't a map function that can handle vectors and lists together (I don't think)
+# BAGS_mean <- filter(BAGS, TYPE=="LIG_N")
+# BAGS_out_AllSites_DI = data.frame()
+# for (site in Mic_sites) {
+#   BAGS_input <- filter(BAGS_mean, SITE == site)
+#   forcing_input <- filter(MSBio_sites, SITE == site)
+#   daily_input <- filter(DailyInput, SITE == site)
+#   BO_DI <- MIMICS_LITBAG(forcing_df = forcing_input, litBAG = BAGS_input, dailyInput = daily_input, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T) 
+#   BAGS_out_AllSites_DI <- rbind(BAGS_out_AllSites_DI,BO_DI)
+# }
+
+#all sites and all litters with daily input looping through different soil moistures and litters as well
+#prep the data
+#create different soil moisture for steady state and daily input data
+MSBio_sites_SM <- rbind(MSBio_sites, MSBio_sites, MSBio_sites)
+#below creates water scalar over 1 so maybe need to change all maxes where W_SCALAR over 1 is equal to 1? Mathematically, fine to go over 1....
+MSBio_sites_SM <- MSBio_sites_SM %>% mutate(SM_type = c(rep("mean", 7), rep("max", 7), rep("min", 7))) %>% 
+  mutate(W_SCALAR2 = case_when(SM_type == "mean" ~ W_SCALAR,
+         SM_type == "max" ~ W_SCALAR*uci_SM_ratio,
+         SM_type == "min" ~ W_SCALAR*lci_SM_ratio)) %>%
+  mutate(W_SCALAR2 = case_when(W_SCALAR2>1~1, TRUE ~ W_SCALAR2)) %>%
+  mutate(W_SCALAR = W_SCALAR2)
+DailyInput_SM <- rbind(DailyInput, DailyInput, DailyInput)
+SM_mult <- MSBio_sites %>% select(SITE, uci_SM_ratio, lci_SM_ratio)
+DailyInput_SM <- DailyInput_SM %>% left_join(SM_mult, by="SITE") %>% mutate(SM_type = c(rep("mean", 2561), rep("max", 2561), rep("min", 2561))) %>% 
+  mutate(W_SCALAR2 = case_when(SM_type == "mean" ~ W_SCALAR,
+         SM_type == "max" ~ W_SCALAR *uci_SM_ratio,
+         SM_type == "min" ~ W_SCALAR *lci_SM_ratio)) %>%
+  mutate(W_SCALAR2 = case_when(W_SCALAR2>1~1, TRUE ~ W_SCALAR2)) %>%
+  mutate(W_SCALAR = W_SCALAR2)
+
+#mean litter at steady state
+# BAGS_out_AllSites_var = data.frame()
+# SM = c("mean", "max", "min")
+# for (SM_type2 in SM) {
+#   MSBio_sites_in <- filter(MSBio_sites_SM, SM_type==SM_type2)
+#   DailyInput_in <- filter(DailyInput_SM, SM_type==SM_type2)
+#   LQ = c("LIG_N_sp1", "LIG_N_sp2", "LIG_N_sp3")
+#     for (bag_type in LQ) {
+#       BAGS_mean <- filter(BAGS, TYPE==bag_type)
+#         for (site in Mic_sites) {
+#           BAGS_input <- filter(BAGS_mean, SITE == site)
+#           forcing_input <- filter(MSBio_sites_in, SITE == site)
+#           daily_input <- filter(DailyInput_in, SITE == site)
+#           BO_DI <- MIMICS_LITBAG(forcing_df = forcing_input, litBAG = BAGS_input, dailyInput = daily_input, nspin_yrs=3, nspin_days=0, litadd_day=315, verbose=T)
+#           BAGS_out_AllSites_var <- rbind(BAGS_out_AllSites_var,BO_DI)
+#         }
+#       }
+# }
 
 
-
-#all sites and all litters
-BAGS_mean <- filter(BAGS_sites, TYPE=="mean")
-BAGS_input <- split(BAGS_mean, 1:nrow(BAGS_mean))
-forcing_input <- split(MSBio_sites, 1:nrow(MSBio_sites))
-BAGS_out_AllSites <- map2(forcing_input, BAGS_input, ~MIMICS_LITBAG(forcing_df = .x, litBAG = .y, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T)) %>% bind_rows()
-
-#all sites and all litters with daily input
-#switch to loop since there isn't a map function that can handle vectors and lists together (I don't think)
-BAGS_mean <- filter(BAGS_sites, TYPE=="mean")
-BAGS_out_AllSites_DI = data.frame()
-for (site in Mic_sites) {
-  BAGS_input <- filter(BAGS_mean, Site == site)
-  forcing_input <- filter(MSBio_sites, SITE == site)
-  daily_input <- filter(DailyInput, SITE == site)
-  BO_DI <- MIMICS_LITBAG(forcing_df = forcing_input, litBAG = BAGS_input, dailyInput = daily_input, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T) 
-  BAGS_out_AllSites_DI <- rbind(BAGS_out_AllSites_DI,BO_DI)
+#species specific litter at steady state
+#315th day of the year is 11/11/21 which is the average day the litter was deployed
+BAGS_out_AllSites_ss = data.frame()
+SM = c("mean", "max", "min")
+for (SM_type2 in SM) {
+  MSBio_sites_in <- filter(MSBio_sites_SM, SM_type==SM_type2)
+  DailyInput_in <- filter(DailyInput_SM, SM_type==SM_type2)
+  LQ = c("LIG_N_sp1", "LIG_N_sp2", "LIG_N_sp3")
+  for (bag_type in LQ) {
+    BAGS_mean <- filter(BAGS, TYPE==bag_type)
+    MSBio_sites_in$LIG_N = MSBio_sites_in[[bag_type]]
+    for (site in Mic_sites) {
+      BAGS_input <- filter(BAGS_mean, SITE == site)
+      forcing_input <- filter(MSBio_sites_in, SITE == site)
+      daily_input <- filter(DailyInput_in, SITE == site)
+      BO_DI <- MIMICS_LITBAG(forcing_df = forcing_input, litBAG = BAGS_input, dailyInput = daily_input, nspin_yrs=3, nspin_days=0, litadd_day=315, verbose=T)
+      BAGS_out_AllSites_ss <- rbind(BAGS_out_AllSites_ss,BO_DI)
+    }
+  }
 }
 
+# LQ = c("LIG_N_sp1", "LIG_N_sp2", "LIG_N_sp3")
+# for (bag_type in LQ) {
+#   BAGS_mean <- filter(BAGS, TYPE==bag_type)
+#   MSBio_sites_in$LIG_N = MSBio_sites_in[[bag_type]]
+#   print(MSBio_sites_in$LIG_N)
+# }
 
+# #just LQ
+# BAGS_out_AllSites_var = data.frame()
+# LQ = c("LIG_N", "LIG_N_max", "LIG_N_min")
+# for (bag_type in LQ) {
+#   BAGS_mean <- filter(BAGS, TYPE==bag_type)
+#   for (site in Mic_sites) {
+#     BAGS_input <- filter(BAGS_mean, SITE == site)
+#     forcing_input <- filter(MSBio_sites, SITE == site)
+#     daily_input <- filter(DailyInput, SITE == site)
+#     BO_DI <- MIMICS_LITBAG(forcing_df = forcing_input, litBAG = BAGS_input, dailyInput = daily_input, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T)
+#     BAGS_out_AllSites_var <- rbind(BAGS_out_AllSites_var,BO_DI)
+#   }
+# }
+# 
+# 
+# #just one site soil moisture loop
+#   BAGS_out_AllSites_test = data.frame()
+#   SM = c("mean", "max", "min")
+#   for (SM_type2 in SM) {
+#     MSBio_sites_in <- filter(MSBio_sites_SM, SM_type==SM_type2)
+#     DailyInput_in <- filter(DailyInput_SM, SM_type==SM_type2)
+#       BAGS_mean <- filter(BAGS, TYPE=="LIG_N")
+#       BAGS_input <- filter(BAGS_mean, SITE == "BART")
+#         forcing_input <- filter(MSBio_sites_in, SITE == "BART")
+#         daily_input <- filter(DailyInput_in, SITE == "BART")
+#         BO_DI <- MIMICS_LITBAG(forcing_df = forcing_input, litBAG = BAGS_input, dailyInput = daily_input, nspin_yrs=0.5, nspin_days=0, litadd_day=10, verbose=T)
+#         BAGS_out_AllSites_test <- rbind(BAGS_out_AllSites_test,BO_DI)
+#       }
+# 
+#   #just one site daily input
+#   BAGS_mean <- filter(BAGS, TYPE=="LIG_N")
+#   BAGS_input <- filter(BAGS_mean, SITE == "BART")
+#   forcing_input <- filter(MSBio_sites, SITE == "BART")
+#   daily_input <- filter(DailyInput, SITE ==  "BART")
+#   BO_BART <- MIMICS_LITBAG(forcing_df = forcing_input, litBAG = BAGS_input, dailyInput = daily_input, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T) 
+#   
+  
 ####
 #plot output
 ####
@@ -160,74 +260,137 @@ colorBlind7  <- c("#E69F00", "#56B4E9", "#009E73",
 #Formating observational data for comparing to field litter mass loss
 Field_LML <- read.csv("Example_simulations/Data/Litter_decomp_all.csv")
 #Add Species to group_by to get species-specific summary
-#note that becasue this is percent loss you do not need to convert to C!
-LML_sum2 <- Field_LML  %>% group_by(site, time.point) %>% drop_na(percent.loss.litter) %>% summarize(mean.ML = mean(percent.loss.litter*100),
-                                                                                                n = n(),
-                                                                                                sd = sd(percent.loss.litter*100),
-                                                                                                SE = sd/sqrt(n),
-                                                                                                lci.ML = mean.ML - qt(1 - ((1 - 0.95) / 2), n - 1) * SE,
-                                                                                                uci.ML = mean.ML + qt(1 - ((1 - 0.95) / 2), n - 1) * SE,
-                                                                                                doy = mean(days_elapsed)) %>% mutate(doy=round(doy, digits=0)) %>%
+#note that because this is percent loss you do not need to convert to C!
+#below doy is days elapsed!!
+LML_sum2 <- Field_LML  %>% group_by(site, time.point) %>% drop_na(percent.loss.litter) %>% filter(percent.loss.litter > 0) %>%
+  summarize(mean.ML = mean(percent.loss.litter*100),
+  n = n(),
+  sd = sd(percent.loss.litter*100),
+  SE = sd/sqrt(n),
+  lci.ML = mean.ML - qt(1 - ((1 - 0.95) / 2), n - 1) * SE,
+  uci.ML = mean.ML + qt(1 - ((1 - 0.95) / 2), n - 1) * SE,
+  lci.ML.99 = mean.ML - qt(1 - ((1 - 0.99) / 2), n - 1) * SE,
+  uci.ML.99 = mean.ML + qt(1 - ((1 - 0.99) / 2), n - 1) * SE,
+  min.ML = min(percent.loss.litter*100),
+  max.ML = max(percent.loss.litter*100),
+  doy = mean(days_elapsed)) %>% mutate(doy=round(doy, digits=0)) %>%
 filter(site %in% Mic_sites)
 
 
 #comparison of baseline MIMICS to LML
-LIT_init <- BAGS_out_AllSites_DI %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% select(SITE, LITi)
+#got rid of LITi calcs since all litters back to the same starting value
+#LIT_init <- BAGS_out_AllSites_DI %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% 
+#  mutate(SITE.LT = paste(SITE, Litter_Type, sep=".")) %>% select(SITE.LT, LITi)
 #boxplot(LIT_init$LITi)
-BAGS_out_plot <- BAGS_out_AllSites_DI %>% left_join(LIT_init, by = "SITE") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
-#plotting
+BAGS_out_plot <- BAGS_out_AllSites_ss  %>% mutate(SITE.LT = paste(SITE, Litter_Type, sep=".")) %>% mutate(LIT_PerLoss = ((0.1 - (LITBAGm+LITBAGs))/0.1)*100)
+#wide format for plotting
+BAGS_out_wide = BAGS_out_plot %>% select(SITE, Litter_Type, SM_Type, DAY, LIT_PerLoss) %>% 
+  pivot_wider(names_from = Litter_Type, values_from = LIT_PerLoss)
+#plotting - check!
 ggplot() +
-  geom_line(data=BAGS_out_plot, aes(y=100-LIT_PerLoss, x=DAY, group=SITE, color=SITE), linewidth=1.5, alpha=0.5) +
-  #geom_ribbon(data=BAGS_out_wide, aes(y=100-mean, x=DAY, ymin = 100-lci, ymax=100-uci, alpha = 0.3)) +
-  geom_point(data=LML_sum2, aes(y=100-mean.ML, x=doy+10, group=site, color=site), size = 3) +
-  geom_errorbar(data=LML_sum2, aes(y=100-mean.ML, x=doy+10, ymin = 100-lci.ML, ymax = 100-uci.ML, group=site, color=site), width=0,linewidth=1) +
+  geom_line(data=BAGS_out_wide, aes(y=100-LIG_N_sp1, x=DAY-315, group=SITE, color=SITE), linewidth=1.5, alpha=0.5) +
+  geom_line(data=BAGS_out_wide, aes(y=100-LIG_N_sp2, x=DAY-315, group=SITE, color=SITE), linewidth=1.5, alpha=0.5) +
+  geom_line(data=BAGS_out_wide, aes(y=100-LIG_N_sp3, x=DAY-315, group=SITE, color=SITE), linewidth=1.5, alpha=0.5) +
+  #geom_ribbon(data=BAGS_out_wide, aes(y=100-LIG_N, x=DAY, ymin = 100-LIG_N_min, ymax=100-LIG_N_max, group=SITE, fill=SITE), alpha = 0.3) +
+  geom_point(data=LML_sum2, aes(y=100-mean.ML, x=doy, group=site, color=site), size = 3) +
+  geom_errorbar(data=LML_sum2, aes(y=100-mean.ML, x=doy, ymin = 100-lci.ML, ymax = 100-uci.ML, group=site, color=site), width=0,linewidth=1) +
+  xlim(0, 780) +
+  ylab("Litter Bag C Remaining (%)") +
+  xlab("Days elapsed") +
+  facet_wrap(.~SM_Type) +
+  theme_bw(base_size = 20)
+#summary data - works ok for visualization!
+BO_plot_sum <- BAGS_out_plot %>% group_by(SITE,DAY,SM_Type) %>% summarise(mean=mean(LIT_PerLoss), min=min(LIT_PerLoss), max=max(LIT_PerLoss))
+ggplot() +
+  geom_ribbon(data=BO_plot_sum, aes(y=100-mean, x=DAY-315, ymin = 100-min, ymax=100-max, group=SITE, fill=SITE), alpha = 0.3) +
+  geom_point(data=LML_sum2, aes(y=100-mean.ML, x=doy, group=site, color=site), size = 3) +
+  geom_errorbar(data=LML_sum2, aes(y=100-mean.ML, x=doy, ymin = 100-lci.ML, ymax = 100-uci.ML, group=site, color=site), width=0,linewidth=1) +
   ylab("Litter Bag C Remaining (%)") +
   xlab("Day") +
+  xlim(0, 780) +
+  facet_wrap(.~SM_Type) +
   theme_bw(base_size = 20)
-ggplot(BAGS_out_AllSites, aes(x=DAY, y=MICr/MICk, color=SITE)) + geom_line()
+
+
+#comparing spin up with mean vs individual litters
+BO_var <- filter(BAGS_out_AllSites_var, DAY == 315)
+BO_ss <- filter(BAGS_out_AllSites_ss, DAY == 315)
+ggplot(BO_var, aes(x=SITE, y=MICr/MICk, color=SITE)) +
+  geom_point(size=4) +
+  #geom_point(BAGS_out_AllSites_var, aes(x=DAY, y=MICr/MICk, color=SITE), shape=2) +
+  facet_grid(Litter_Type~SM_Type)
+ggplot(BO_var, aes(x=LITm/LITs, y=MICr/MICk, color=SITE)) +
+  geom_point(size=4) +
+  #geom_point(BAGS_out_AllSites_var, aes(x=DAY, y=MICr/MICk, color=SITE), shape=2) +
+  facet_grid(Litter_Type~SM_Type)
+ggplot(BO_ss, aes(x=LITm/LITs, y=MICr/MICk, color=SITE)) +
+  geom_point(size=4) +
+  #geom_point(BAGS_out_AllSites_var, aes(x=DAY, y=MICr/MICk, color=SITE), shape=2) +
+  facet_grid(Litter_Type~SM_Type)
 
 
 # #formating data for modelVobs, RWA, and effect size
+#need to standardize and log this data before running it thru again
+#MFG_stdzd <- MFG_analysis %>% mutate_at(c('C_O', 'LIG_N', 'log.vwc'), ~(scale(.) %>% as.vector))
 FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% select(time.point,SITE.DAY, mean.ML)
-LIT_init <- BAGS_out_AllSites_DI %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% select(SITE, LITi)
-boxplot(LIT_init$LITi)
-df <- BAGS_out_AllSites_DI %>% left_join(LIT_init, by = "SITE")
-df_LML <- df %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
+#LIT_init <- BAGS_out_AllSites_DI %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% select(SITE, LITi)
+#boxplot(LIT_init$LITi)
+#df <- BAGS_out_AllSites_DI %>% left_join(LIT_init, by = "SITE")
+LITi = 0.1
+df_LML <- BAGS_out_AllSites_ss %>% mutate(DAY.LitOut = DAY -314) %>% mutate(SITE.DAY=paste(SITE, DAY.LitOut, sep=".")) %>% 
+  right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
 #creating table with LML for each day
-df_LML_All <- df %>% filter(DAY>10) %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
-#filtering so each site only has days for which we have observations 
-T2_DAY <- df_LML %>% filter(time.point==2) %>% mutate(T2.DAY = DAY) %>% select(SITE, T2.DAY)
-df_LML_RI <- df_LML_All %>% inner_join(T2_DAY, by = "SITE") %>% filter(DAY <= T2.DAY+10) #accounts for 10 days of spinup before starting simulation
-
+# df_LML_All <- BAGS_out_AllSites_var %>% filter(DAY>315) %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
+# #filtering so each site only has days for which we have observations 
+# T2_DAY <- df_LML %>% filter(time.point==2) %>% mutate(T2.DAY = DAY) %>% select(SITE, T2.DAY)
+# T1_DAY <- df_LML %>% filter(time.point==1) %>% mutate(T1.DAY = DAY) %>% select(SITE, T1.DAY)
+# df_LML_RI <- df_LML_All %>% inner_join(T2_DAY, by = "SITE") %>% inner_join(T1_DAY, by = "SITE") %>% filter(DAY <= T2.DAY+315) #accounts for 10 days of spinup before starting simulation
+# df_LML_T1T2 <- df_LML_RI %>% filter(DAY==T2.DAY | DAY==T1.DAY)
 
 #comparison of modeled and observed decomp at timepoint 2
 modelVobs <- lm(LIT_PerLoss~mean.ML, data=df_LML)
 summary(modelVobs)
 sqrt(mean((df_LML$mean.ML - df_LML$LIT_PerLoss)^2))
-ggplot(df_LML, aes(x=mean.ML, y=LIT_PerLoss)) + geom_point(aes(color=SITE), size=4) + geom_smooth(method = "lm", color="black")  + xlim(0,50) + ylim(0,80) +
+ggplot(df_LML, aes(x=mean.ML, y=LIT_PerLoss)) + geom_point(aes(color=SITE), size=4) + geom_smooth(method = "lm", color="black")  + xlim(0,80) + ylim(0,80) +
   xlab("Observed litter percent C loss") + ylab("Modeled litter percent C loss") + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16)
 
 
 
 ####
-#RWA and effect size estimation
+#RWA and effect size estimation - set up for multiple soil moistures and multiple litter qualities
 ####
-#preparing data for analysis over time
-DI_2y <- rbind(DailyInput, DailyInput)
-DI_2y$DAY2 <- c(0:365, 0:365, 0:365, 0:364, 0:365, 0:365, 0:365, 366:731, 366:731, 366:731, 364:728, 366:731, 366:731, 366:731) 
-DI_analysis <- DI_2y %>% inner_join(T2_DAY, by = "SITE") %>% filter(DAY2 >10 & DAY2 <= T2.DAY) %>% mutate(SITE.DAY = paste(SITE, DAY2, sep = "."))
-df_analysis <- df_LML_RI %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>% 
-  mutate(SITE.DAY = paste(SITE, DAY, sep = ".")) %>% inner_join(DI_analysis, by="SITE.DAY") #%>% filter(time.point==2)
+#OPTION 1: preparing data for analysis over time
+# DI_2y <- rbind(DailyInput, DailyInput)
+# DI_2y$DAY2 <- c(0:365, 0:365, 0:365, 0:364, 0:365, 0:365, 0:365, 366:731, 366:731, 366:731, 364:728, 366:731, 366:731, 366:731) 
+# DI_analysis <- DI_2y %>% inner_join(T2_DAY, by = "SITE") %>% filter(DAY2 >10 & DAY2 <= T2.DAY) %>% mutate(SITE.DAY = paste(SITE, DAY2, sep = "."))
+# df_analysis <- df_LML_RI %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>% 
+#   mutate(SITE.DAY = paste(SITE, DAY, sep = ".")) %>% inner_join(DI_analysis, by="SITE.DAY") #%>% filter(time.point==2)
+#OPTION 2: mean daily input model output analysis 
+DI_means <- DailyInput_SM %>% mutate(SITE.SM = paste(SITE, SM_type, sep = ".")) %>% group_by(SITE.SM) %>% 
+  summarise(W_SCALAR=mean(W_SCALAR), MAT=mean(MAT)) %>% select(SITE.SM, W_SCALAR, MAT)
+#initial MICrK
+MIC_init <- BAGS_out_AllSites_ss %>% filter(DAY == 315) %>% mutate(MICrK.i =  MICr/MICk)%>%
+  mutate(SITE.SM.LQ = paste(SITE, SM_Type, Litter_Type, sep = ".")) %>% select(SITE.SM.LQ, MICrK.i) 
+#need bag means!
+BAGS_LIGN <- MSBio_BAGS %>% mutate(SITE.LQ = paste(SITE, TYPE, sep = ".")) %>% select(SITE.LQ, BAG_LIG_N)
+df_analysis <- df_LML %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>% 
+  mutate(SITE.SM.LQ = paste(SITE, SM_Type, Litter_Type, sep = ".")) %>% mutate(SITE.SM = paste(SITE, SM_Type, sep = ".")) %>%
+  mutate(SITE.LQ = paste(SITE, Litter_Type, sep = ".")) %>% inner_join(DI_means, by="SITE.SM") %>% 
+  inner_join(MIC_init, by="SITE.SM.LQ") %>% inner_join(BAGS_LIGN, by="SITE.LQ")
 #logical checks
 df_check <- df_analysis %>% filter(MICrK > 0.01) %>%
   filter(MICrK < 100) %>%
   filter(MIC/SOC > 0.0001) %>%
   filter(MIC/SOC < 0.40) 
+plot((df_check$MICr/df_check$MICk), df_check$BAG_LIG_N)
 #relative weights analysis
-MIM_rwa <- rwa(df_check, "LIT_PerLoss", c("MAT", "W_SCALAR", "LIG_N", "MICrK"), applysigns = TRUE, plot = TRUE)
-plot_rwa(MIM_rwa) #climate still dominant but less important with lower ANPP at OSBS and TALL
+df_check$log_WS <- log(df_check$W_SCALAR)
+df_rwa <- df_check %>% select(LIT_PerLoss, log_WS, BAG_LIG_N, MICrK.i) %>% 
+  mutate_at(vars(c("log_WS", "BAG_LIG_N", "MICrK.i")), ~(scale(.) %>% as.vector))
+MIM_rwa <- rwa(df_rwa, "LIT_PerLoss", c("log_WS", "BAG_LIG_N", "MICrK.i"), applysigns = TRUE, plot = TRUE) #"MAT", 
+plot_rwa(MIM_rwa) 
 #effect size
-Obs_ES_mod <- lmer(LIT_PerLoss ~ MAT+W_SCALAR+LIG_N+MICrK+ (1|SITE.x), data = df_check)
+Obs_ES_mod <- lmer(LIT_PerLoss ~ scale(log(W_SCALAR))+scale(BAG_LIG_N)+scale(MICrK.i)+ (1|SITE), data = df_check) #MAT #scale(BAG_LIG_N)+
 summary(Obs_ES_mod)
 Obs_ES <- as.data.frame(fixef(Obs_ES_mod)) #fixed effects coefficients as effect size
 #Obs_ES <- as.data.frame(Obs_ES_mod$coefficients) #if not using fixed effects model do this
@@ -274,7 +437,7 @@ rf.vip <- function(df) {
   return(Obs_rf)
 }
 y = rf.vip(df_check)
-ggplot(y, aes(x=Vars, y=rel_rf)) + geom_bar(stat="identity", fill="blue") + coord_flip() + geom_text(aes(label=round(rel_rf, digits=1)), color="red", size=7) +theme_bw(base_size = 16)
+y %>% mutate(Vars=factor(Vars, levels = c("MICrK", "LIG_N", "MAT", "W_SCALAR"))) %>% ggplot(aes(x=Vars, y=rel_rf)) + geom_bar(stat="identity", fill="blue") + coord_flip() + geom_text(aes(label=round(rel_rf, digits=1)), color="red", size=7) +theme_bw(base_size = 16)
 #replicate function 10 times
 result <- t(replicate(10, rf.vip(df_check)))
 for (i in 1:10) {
@@ -290,6 +453,12 @@ cor.p <- cor(df_cor, method="pearson")
 corrplot(cor.p, type = "upper") #aligned with RWA
 cor.s <- cor(df_cor, method="spearman")
 corrplot(cor.s, type = "lower")#aligned with RWA
+
+#simple realtionships between variables
+ggplot(df_check, aes(x=W_SCALAR, y=LIT_PerLoss)) + geom_point(size=3, aes(color=SITE)) + geom_smooth(method="lm") + theme_bw(base_size = 16)
+ggplot(df_check, aes(x=MAT, y=LIT_PerLoss)) + geom_point(size=3, aes(color=SITE)) + geom_smooth(method="lm") + theme_bw(base_size = 16)
+ggplot(df_check, aes(x=LIG_N, y=LIT_PerLoss)) + geom_point(size=3, aes(color=SITE)) + geom_smooth(method="lm") + theme_bw(base_size = 16)
+ggplot(df_check, aes(x=MICrK.i, y=LIT_PerLoss)) + geom_point(size=3, aes(color=SITE)) + geom_smooth(method="lm") + theme_bw(base_size = 16)
 
 ###
 #moisture function testing

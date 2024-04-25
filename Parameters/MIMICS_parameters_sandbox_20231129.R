@@ -3,7 +3,7 @@
 ########################################
 Vslope  <- rep(0.063, 6)
 Vint    <- rep(5.47, 6)
-aV      <-rep(0.000008, 6)*0.4  #for steady state, multiply by 1.5; for daily inputs, multiply by 0.4
+aV      <-rep(0.000008, 6)*0.7  #for steady state, multiply by 1.5; for daily inputs, multiply by 0.4
 Kslope  <- rep(c(0.025, 0.035, 0.025),2)
 Kint    <- rep(3.19, 6)
 aK      <- rep(10, 6)
@@ -14,7 +14,7 @@ CUE     <- c(0.55, 0.25, 0.75, 0.35)
 tau_r   <- c(0.00052, 0.3)
 tau_K   <- c(0.00024, 0.1)
 Tau_MOD <- c(100, 0.8, 1.2, 2)
-beta    <- c(1.5) # only used if tauMethod='beta'
+beta    <- c(1.5, 1.5) # only used if tauMethod='beta', same value for both r and K
 fPHYS_r <- c(0.3, 1.3)
 fPHYS_K <- c(0.2, 0.8)
 fCHEM_r <- c(0.1, -3, 1)
@@ -36,7 +36,7 @@ fW_p2 <- 2.748028 #* 0.6300376  # MSBio new
 fWmethod=3.      #0-> fW=1, 1->CORPSE, 2->Calibrated, 3->water scalar from other model
 historic=TRUE   #modify Vmax based on historic MAT
 fixed_fMET=FALSE #calculate fMET based on litter chemistry
-tauMethod='NPP'  #'NPP' and 'beta' accepted
+tauMethod='beta'  #'NPP' and 'beta' accepted
 
 #Set default multipliers
 Tau_MULT = 1

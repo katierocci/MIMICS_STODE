@@ -10,13 +10,14 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
   # dailyInput <- dailyInputs
   # loop_dailyInput = TRUE
   # verbose = TRUE
+
   
   # Convert forcing data column names to uppercase
   colnames(forcing_df) <- toupper(colnames(forcing_df))
   
   if(verbose){
     print("-------------------------------------------------------")
-    print(paste0("Starting ", forcing_df$SITE, " - ", litBAG[1]))
+    print(paste0("Starting ", forcing_df$SITE, " - ", litBAG[2], " - ", forcing_df$SM_TYPE)) #, " - ", forcing_df$SM_TYPE
     print("-------------------------------------------------------")
   }
   # drop litterfall if proivded
@@ -84,28 +85,32 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
       # Run MIMICS simulation step
       step = RXEQ(t=NA, y=Ty, pars=Tpars_mod)
       
+      
       # Litter bag decomp simulation step
       LITbag  <- rep(NA,4)
       LITbag[1] <- Ty[[3]] * Tpars_mod$VMAX[1] * LITbag_1 / (Tpars_mod$KM[1] + Ty[[3]])   #MIC_1 mineralization of METABOLIC litter
       LITbag[2] <- Ty[[3]] * Tpars_mod$VMAX[2] * LITbag_2 / (Tpars_mod$KM[2] + Ty[[3]])   #MIC_1 mineralization of STRUC litter
-      LITbag[3] <- Ty[[4]] * Tpars_mod$VMAX[4] * LITbag_1 / (Tpars_mod$KM[4] + Ty[[4]])   #mineralization of MET litter
-      LITbag[4] <- Ty[[4]] * Tpars_mod$VMAX[5] * LITbag_2 / (Tpars_mod$KM[5] + Ty[[4]])   #mineralization of SRUCTURAL litter
+      LITbag[3] <- Ty[[4]] * Tpars_mod$VMAX[4] * LITbag_1 / (Tpars_mod$KM[4] + Ty[[4]])   #MIC_2 mineralization of MET litter
+      LITbag[4] <- Ty[[4]] * Tpars_mod$VMAX[5] * LITbag_2 / (Tpars_mod$KM[5] + Ty[[4]])   #MIC_2 mineralization of SRUCTURAL litter
 
+      
       # Update MIMICS pools
       #---------------------------------------------
       MIMfwd = MIMfwd + unlist(step[[1]]) # MIMICS pools
       
       LITbag_1 <- LITbag_1 - LITbag[1] - LITbag[3] # Litter bag pools
       LITbag_2 <- LITbag_2 - LITbag[2] - LITbag[4] 
-      
+
 
       # add litter on correct day
       if (d == litadd_day)   {
         if (h == 24)  {
-          LITbag_1 <- LITbag_1 + as.numeric(litBAG[3]) # Metabolic pool add
-          LITbag_2 <- LITbag_2 + as.numeric(litBAG[4]) # Structural pool add
+          LITbag_1 <- LITbag_1 + as.numeric(litBAG$BAG_LITm) 
+          LITbag_2 <- LITbag_2 + as.numeric(litBAG$BAG_LITs) 
         }
       }
+      
+    
           
       #write out daily results
       if (h == 24) {
@@ -139,11 +144,12 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
                       as.data.frame(MIC),
                       as.data.frame(SOM))
   
-  LITBAG_out <- LITBAG_out * depth * 1e4 / 1e6 # Soil depth and unit conversion 
+  LITBAG_out <- LITBAG_out * depth * 1e4 / 1e6  #mg/cm3 converted kg/m2
   LITBAG_out <- as.data.frame(t(LITBAG_out))
   colnames(LITBAG_out) <- c("LITBAGm", "LITBAGs", "LITm", "LITs", "MICr", "MICk", "SOMp", "SOMc", "SOMa")
   LITBAG_out <- cbind(data.frame(SITE = forcing_df$SITE,
-                                 Litter_Type = as.character(litBAG[1]),
+                                 Litter_Type = as.character(litBAG[2]),
+                                 SM_Type = as.character(forcing_df$SM_TYPE),
                                  DAY=seq(1:nrow(LITBAG_out))), LITBAG_out)
   
   return(LITBAG_out)

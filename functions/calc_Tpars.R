@@ -49,12 +49,12 @@ calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
 
   # set fMET
   if(!fixed_fMET){
-    fMET  <- fmet_p[1] * (fmet_p[2] - fmet_p[3] * LIG_N)    
-  } else {
+    #fMET  <- fmet_p[1] * (fmet_p[2] - fmet_p[3] * LIG_N)  
+    fMET  <- ifelse(LIG_N<65, (fmet_p[1] * (fmet_p[2] - fmet_p[3] * LIG_N)), 0.01) #to account for high LIG_N that cause negtaives
+    } else {
     # Fixed Fmet, ONLY for model validation against MIMICS et al. 2015 Sandbox 
     fMET <- 0.3846423
   }
-
   
   # Calc litter input rate from annual or daily flux then convert units
   if (is.na(litfall)) {
@@ -74,7 +74,8 @@ calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
     beta=1 # turns off beta
   } else if (tauMethod=='beta') {
     Tau_MOD1 <- 1 # turns off NPP effects on turnover
-    beta=beta[1] # use Kat's density dependent function         
+    beta=beta #[1] # use Kat's density dependent function  
+    #add in another parameter that adds 1 to 
   }
   
   Tau_MOD2 <- Tau_MOD[4]                        
