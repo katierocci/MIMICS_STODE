@@ -82,7 +82,8 @@ calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
   
   tau <- c(tau_r[1]*exp(tau_r[2]*fMET), 
            tau_K[1]*exp(tau_K[2]*fMET))   
-  tau <- tau * Tau_MOD1 * Tau_MOD2 * Tau_MULT 
+  tau <- tau * Tau_MOD1 * Tau_MOD2 * Tau_MULT
+  #print(tau)
   
   fPHYS    <- c(fPHYS_r[1] * exp(fPHYS_r[2]*fCLAY), 
                 fPHYS_K[1] * exp(fPHYS_K[2]*fCLAY)) 	            
@@ -154,8 +155,8 @@ calc_Tpars_CN <- function(TSOI, ANPP, CLAY, CN, LIG, x, fW=1,nUPmod=1) {
   Tau_MOD1[Tau_MOD1 < Tau_MOD[2]] <- Tau_MOD[2]
   Tau_MOD1[Tau_MOD1 > Tau_MOD[3]] <- Tau_MOD[3] 
   
-  tau <- c(tau_r[1]*exp(tau_r[2]*fMET), 
-           tau_K[1]*exp(tau_K[2]*fMET))   
+  tau <- c(tau_r[1]*exp(tau_r[2]*fMET), #*fMET
+           tau_K[1]*exp(tau_K[2]*fMET)) #*fMET  
   tau <- tau * Tau_MOD1 * Tau_MOD2 * Tau_MULT 
   
   fPHYS    <- c(fPHYS_r[1] * exp(fPHYS_r[2]*fCLAY), 

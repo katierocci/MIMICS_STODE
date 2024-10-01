@@ -13,3 +13,5 @@ fmet_p_default <- fmet_p
 tau_r_default <- tau_r
 tau_K_default <- tau_K
 beta_default <- beta
+
+#beta.pset.mult <- 1

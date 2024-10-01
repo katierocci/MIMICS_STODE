@@ -34,80 +34,29 @@ source("functions/MC_parameterization/set_parameter_defaults.R")
 ####
 
 #load site data
-MSBio <- read.csv("Example_simulations/Data/Site_annual_clim_final.csv")
+MSBio <- read.csv("Example_simulations/Data/Site_annual_clim_validation.csv")
 #match input data structure
 #AGNPP should be in grams Dry Weight (gDW) not gC! multiply by 2 here to remedy
 #switching AGNPP to LITFALL to match daily inputs!
-#don't have gravimetric soil moisture, just volumetric, assuming a BD of 1g/cm3 makes them equivalent - could be bad assumption given this is BD of leaves
 MSBio2 <- MSBio %>% mutate(SITE = Site, ANPP = LITFALL_sum*2, TSOI = TSOI_mean, CLAY = PCT_CLAY_mean, GWC = H2OSOI_mean*100, W_SCALAR=W_SCALAR_mean) %>%
   select(SITE, ANPP, TSOI, CLAY, LIG_N, LIG_N_sp1, LIG_N_sp2, LIG_N_sp3, GWC, W_SCALAR, lci_SM_ratio, uci_SM_ratio) 
-#fixing TALL and OSBS ANPP
-NEON_GPP <- read.csv("Example_simulations/Data/NEON_GPP.csv")
-#MSBio3$ANPP[MSBio3$SITE == "TALL"] <- 510 + 0.41*NEON_GPP[9,2] #using relationship between NEON GPP and ANPP 
-#loading daily inputs and replacing TALL data to be more realistic
-DailyInput <- read.csv("Example_simulations/Data/DailyInput.csv") %>% select(-MAT)
-DailyInput$LITFALL[DailyInput$SITE == "TALL"] <- DailyInput$LITFALL[DailyInput$SITE == "TALL"]*0.60
-DailyInput$ANPP[DailyInput$SITE == "TALL"] <- sum(DailyInput$LITFALL[DailyInput$SITE == "TALL"])
+MSBio_sites <- MSBio2
+#loading daily inputs 
+DailyInput <- read.csv("Example_simulations/Data/DailyInput_validation.csv")
 #replacing MSBio data with daily input sums and means to ensure comparable data between daily data and annual data
 DI_sum <- DailyInput %>% select(SITE, ANPP, TSOI, W_SCALAR) %>% group_by(SITE, ANPP) %>% summarise(TSOI=mean(TSOI), W_SCALAR=mean(W_SCALAR))
 MSBio3 <- MSBio2 %>% select(-ANPP, -TSOI, -W_SCALAR) %>% inner_join(DI_sum, by="SITE")
-#filtering for only sites with microbial data to match observations
-Mic_sites <- c("SERC","BART","TALL","TREE","LENO","HARV","GRSM")
-MSBio_sites <- filter(MSBio3, SITE %in% Mic_sites)
 
-#additional code for: (1) creating DailyInput file for all sites; (2) determining litterfall multiplier for TALL; (3) checking litterfall vs ANPP for inputs; (4) OLD: determining ANPP and LitFall multipliers when we were using both
-#(1)
-#daily data - change site name and MSBio2 row (e.g., 1=BART) to use different site daily input
-# TREE_dailyinput <- read.csv("Example_simulations/Data/TREE_clim.csv")
-#TREE_DI <- TREE_dailyinput %>% mutate(DAY=X, ANPP = rep(sum(LITFALL)*2,366), LITFALL=LITFALL*2, CLAY = rep(MSBio2[7,4], 366),
-#                                       LIG_N = rep(MSBio2[7,5], 366), GWC = H2OSOI*100) %>% # , MAT=TBOT
-#   select(DAY, ANPP, LITFALL, TSOI, CLAY, LIG_N, GWC, W_SCALAR) # MAT, 
-# DailyInput <- rbind(BART_DI, GRSM_DI, HARV_DI, LENO_DI, SERC_DI, TALL_DI, TREE_DI)
-# DailyInput$SITE <- c(rep("BART", 366), rep("GRSM", 366), rep("HARV", 366), rep("LENO", 365), rep("SERC", 366), rep("TALL", 366), rep("TREE", 366))
-# write.csv(DailyInput, "Example_simulations/Data/DailyInput.csv")
 
-# TREE_comp <- data.frame(SITE="TREE", AGNPP_sum=sum(TREE_dailyinput$AGNPP), LF_sum=sum(TREE_dailyinput$LITFALL))
-# LF_comp <- rbind(BART_comp, GRSM_comp, HARV_comp, LENO_comp, SERC_comp, TALL_comp, TREE_comp)
-# write.csv(LF_comp, "LF_comp.csv")
-#checking for NPP which should include above and belowground !
-#BART_comp2 <- data.frame(SITE="BART", AGNPP_sum=sum(BART_dailyinput$NPP), LF_sum=sum(BART_dailyinput$LITFALL))
-#LF_comp2 <- rbind(BART_comp2, GRSM_comp2, HARV_comp2, LENO_comp2, SERC_comp2, TALL_comp2, TREE_comp2)
-#write.csv(LF_comp2, "LF_comp2.csv")
-#LF_comp2 <- read.csv("LF_comp2.csv")
-#(2)
-# DI_40 <- DailyInput %>% filter(DAY==40)
-# NPPComp <-DI_40%>% inner_join(NEON_GPP, by = "SITE")
-# ggplot(NPPComp, aes(x=Annual.GPP, y= ANPP, color=SITE)) + geom_point(size=4) + theme_bw(base_size = 16) #TALL is too high and LENO is too low in comparison to NEON GPP
-# NPP_GoodSites <- NPPComp %>% filter(SITE != "TALL")
-# NPP_mod <- lm(ANPP~Annual.GPP, data=NPP_GoodSites)
-# summary(NPP_mod) #510 + 0.18x #with derecho: 530 + 0.50x
-# #determining multipliers for daily inputs -> new divided by old LITFALL sum estimates
-# TALL_adj =  530 + 0.50*NEON_GPP[3,2]
-# TALL_mult <- TALL_adj/DI_40[6,3] #0.60
-# #checking if more aligned now
-# NPPComp2 <-MSBio3 %>% inner_join(NEON_GPP, by = "SITE")
-# ggplot(NPPComp2, aes(x=Annual.GPP, y= ANPP, color=SITE)) + geom_point(size=4) + theme_bw(base_size = 16)
-#(3)
-#need to start from raw data
-# RawDaily = data.frame()
-# sites_daily <- c("BART", "GRSM", "HARV", "LENO", "SERC", "TALL", "TREE")
-# for (site in sites_daily) {
-#   daily <-  read.csv(paste("Example_simulations/Data/",site,"_clim.csv", sep=""))
-#   daily$SITE = site
-#   RawDaily <- rbind(RawDaily, daily)  
-# }
-# ggplot(RawDaily %>%filter(SITE=='TALL'), aes(x=X, y=LITFALL*2)) + geom_point() +theme_bw() +xlab("DOY") #+ facet_grid(.~SITE)
-# ggplot(RawDaily %>%filter(SITE=='TALL'), aes(x=X, y=AGNPP*2)) + geom_point() +theme_bw() +xlab("DOY") #+ facet_grid(.~SITE)
-#(4)
-# #replace TALL with more realistic data - LENO litterfall and ANPP are similar but TALL litterfall still very off
-# test1 <- filter(DailyInput, DAY == 40)
-# test2 <- inner_join(MSBio_sites, test1, by = "SITE")
-# ggplot(test2, aes(x=ANPP.x, y=ANPP.y, color=SITE)) + geom_point(size=3) + theme_bw(base_size = 16) #comparing adjusted annual ANPP (ANPP.x) to sum of litterfall
-# LF_GoodSites <- test2 %>% filter(SITE != "TALL")
-# LF_mod <- lm(ANPP.y~ANPP.x, data=LF_GoodSites)
-# summary(LF_mod) #-7.2 + 1.7x #derecho: 101 + 1.9x
-# TALL_ANPP.adj <- 101 + 1.9*MSBio_sites[6,2]
-# TALL_mult <- TALL_ANPP.adj/test1[6,2] #0.663 #new: 0.62
+#additional code for creating daily input file
+#daily data - change site name and MSBio2 row (1=MLBS, 2=SCBI, 3=UNDE) to use different site daily input
+# UNDE_dailyinput <- read.csv("Example_simulations/Data/UNDE_clim.csv")
+# UNDE_DI <- UNDE_dailyinput %>% mutate(DAY=X, ANPP = rep(sum(LITFALL)*2,366), LITFALL=LITFALL*2, CLAY = rep(MSBio2[3,4], 366),
+#                                        LIG_N = rep(MSBio2[3,5], 366), GWC = H2OSOI*100, MAT=TBOT) %>%
+#   select(DAY, ANPP, LITFALL, TSOI, MAT, CLAY, LIG_N, GWC, W_SCALAR)
+# DailyInput <- rbind(MLBS_DI, SCBI_DI, UNDE_DI)
+# DailyInput$SITE <- c(rep("MLBS", 366), rep("SCBI", 366), rep("UNDE", 366))
+# write.csv(DailyInput, "Example_simulations/Data/DailyInput_validation.csv")
 
 
 
@@ -120,8 +69,7 @@ MSBio_BAGS$CALC_MET[MSBio_BAGS$CALC_MET <0] = 0.01 #setting negatives to small n
 BAG_init_size <- 100
 BAGS <- MSBio_BAGS %>% select(SITE, TYPE, CALC_MET)
 BAGS$BAG_LITm <- ((BAG_init_size * 1e3 / 1e4)/ depth) * BAGS$CALC_MET #g/m2 converted to mg/cm3
-BAGS$BAG_LITs <- ((BAG_init_size * 1e3 / 1e4)/ depth) * (1-BAGS$CALC_MET) 
-#initial litter = 0.33 because of unit conversions here
+BAGS$BAG_LITs <- ((BAG_init_size * 1e3 / 1e4)/ depth) * (1-BAGS$CALC_MET)
 
 
 ####
@@ -129,41 +77,12 @@ BAGS$BAG_LITs <- ((BAG_init_size * 1e3 / 1e4)/ depth) * (1-BAGS$CALC_MET)
 ####
 
 
-# #Individual site example (SERC - row 8)
-# BAGS_TREE <- filter(BAGS_sites, Site == "TREE" & TYPE == "mean")
-# BAGS_TREE <- BAGS_TREE[,2:5]
-# BAGS_out_TREE_SS <- BAGS_TREE %>% split(1:nrow(BAGS_TREE)) %>% map(~ MIMICS_LITBAG(litBAG=.,
-#                                                                            forcing_df=MSBio_sites[7,],
-#                                                                            dailyInput = TREE_DI, 
-#                                                                            nspin_yrs=2,
-#                                                                            nspin_days=0,
-#                                                                            litadd_day=10,
-#                                                                            verbose=T)) %>% bind_rows()
-# 
-# #all sites and all litters
-# BAGS_mean <- filter(BAGS_sites, TYPE=="mean")
-# BAGS_input <- split(BAGS_mean, 1:nrow(BAGS_mean))
-# forcing_input <- split(MSBio_sites, 1:nrow(MSBio_sites))
-# BAGS_out_AllSites <- map2(forcing_input, BAGS_input, ~MIMICS_LITBAG(forcing_df = .x, litBAG = .y, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T)) %>% bind_rows()
-# 
-# #all sites and all litters with daily input
-# #switch to loop since there isn't a map function that can handle vectors and lists together (I don't think)
-# BAGS_mean <- filter(BAGS, TYPE=="LIG_N")
-# BAGS_out_AllSites_DI = data.frame()
-# for (site in Mic_sites) {
-#   BAGS_input <- filter(BAGS_mean, SITE == site)
-#   forcing_input <- filter(MSBio_sites, SITE == site)
-#   daily_input <- filter(DailyInput, SITE == site)
-#   BO_DI <- MIMICS_LITBAG(forcing_df = forcing_input, litBAG = BAGS_input, dailyInput = daily_input, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T) 
-#   BAGS_out_AllSites_DI <- rbind(BAGS_out_AllSites_DI,BO_DI)
-# }
-
 #all sites and all litters with daily input looping through different soil moistures and litters as well
 #prep the data
 #create different soil moisture for steady state and daily input data
 MSBio_sites_SM <- rbind(MSBio_sites, MSBio_sites, MSBio_sites)
 #below creates water scalar over 1 so maybe need to change all maxes where W_SCALAR over 1 is equal to 1? Mathematically, fine to go over 1....
-MSBio_sites_SM <- MSBio_sites_SM %>% mutate(SM_type = c(rep("mean", 7), rep("max", 7), rep("min", 7))) %>% 
+MSBio_sites_SM <- MSBio_sites_SM %>% mutate(SM_type = c(rep("mean", 3), rep("max", 3), rep("min", 3))) %>% 
   mutate(W_SCALAR2 = case_when(SM_type == "mean" ~ W_SCALAR,
          SM_type == "max" ~ W_SCALAR*uci_SM_ratio,
          SM_type == "min" ~ W_SCALAR*lci_SM_ratio)) %>%
@@ -171,33 +90,16 @@ MSBio_sites_SM <- MSBio_sites_SM %>% mutate(SM_type = c(rep("mean", 7), rep("max
   mutate(W_SCALAR = W_SCALAR2)
 DailyInput_SM <- rbind(DailyInput, DailyInput, DailyInput)
 SM_mult <- MSBio_sites %>% select(SITE, uci_SM_ratio, lci_SM_ratio)
-DailyInput_SM <- DailyInput_SM %>% left_join(SM_mult, by="SITE") %>% mutate(SM_type = c(rep("mean", 2561), rep("max", 2561), rep("min", 2561))) %>% 
+DailyInput_SM <- DailyInput_SM %>% left_join(SM_mult, by="SITE") %>% mutate(SM_type = c(rep("mean", 1098), rep("max", 1098), rep("min", 1098))) %>% 
   mutate(W_SCALAR2 = case_when(SM_type == "mean" ~ W_SCALAR,
          SM_type == "max" ~ W_SCALAR *uci_SM_ratio,
          SM_type == "min" ~ W_SCALAR *lci_SM_ratio)) %>%
   mutate(W_SCALAR2 = case_when(W_SCALAR2>1~1, TRUE ~ W_SCALAR2)) %>%
   mutate(W_SCALAR = W_SCALAR2)
 
-#mean litter at steady state
-# BAGS_out_AllSites_var = data.frame()
-# SM = c("mean", "max", "min")
-# for (SM_type2 in SM) {
-#   MSBio_sites_in <- filter(MSBio_sites_SM, SM_type==SM_type2)
-#   DailyInput_in <- filter(DailyInput_SM, SM_type==SM_type2)
-#   LQ = c("LIG_N_sp1", "LIG_N_sp2", "LIG_N_sp3")
-#     for (bag_type in LQ) {
-#       BAGS_mean <- filter(BAGS, TYPE==bag_type)
-#         for (site in Mic_sites) {
-#           BAGS_input <- filter(BAGS_mean, SITE == site)
-#           forcing_input <- filter(MSBio_sites_in, SITE == site)
-#           daily_input <- filter(DailyInput_in, SITE == site)
-#           BO_DI <- MIMICS_LITBAG(forcing_df = forcing_input, litBAG = BAGS_input, dailyInput = daily_input, nspin_yrs=3, nspin_days=0, litadd_day=315, verbose=T)
-#           BAGS_out_AllSites_var <- rbind(BAGS_out_AllSites_var,BO_DI)
-#         }
-#       }
-# }
 
-#just one parameter set - must do this one first to ensure a modifyied parameter sets isn't input to the starting point model
+#just one parameter set
+site_val <- c("MLBS", "SCBI", "UNDE")
 BAGS_out_AllSites_SP = data.frame()
 SM = c("mean", "max", "min")
 for (SM_type2 in SM) {
@@ -207,7 +109,7 @@ for (SM_type2 in SM) {
   for (bag_type in LQ) {
     BAGS_mean <- filter(BAGS, TYPE==bag_type)
     MSBio_sites_in$LIG_N = MSBio_sites_in[[bag_type]]
-    for (site in Mic_sites) {
+    for (site in site_val) {
       BAGS_input <- filter(BAGS_mean, SITE == site)
       forcing_input <- filter(MSBio_sites_in, SITE == site)
       daily_input <- filter(DailyInput_in, SITE == site)
@@ -217,12 +119,11 @@ for (SM_type2 in SM) {
   }
 }
 
-
-#species specific litter at steady state - multiple parameter sets
-#315th day of the year is 11/11/21 which is the average day the litter was deployed
-ES_Psets <- read.csv("ES_Psets_5000_NewInputs_ES.csv")
-ES_Psets <- ES_Psets %>% filter(ID==175 | ID==176 | ID==190) 
-BAGS_out_AllSites_Cal = data.frame()
+#all litters and soil moistures
+ site_val <- c("MLBS", "SCBI", "UNDE")
+ ES_Psets <- read.csv("ES_Psets_5000_NewInputs_ES.csv")
+ ES_Psets <- ES_Psets %>% filter(ID==175 | ID==176 | ID==190)
+ BAGS_out_AllSites_ES_val = data.frame()
 Pset_ID <- ES_Psets$ID
 for (i in Pset_ID) {
   ES_Pset_ID <- filter(ES_Psets, ID == i)
@@ -232,7 +133,6 @@ for (i in Pset_ID) {
    #CUE <<- CUE_default * ES_Pset_ID$CUE_x[1]
    #vMOD <<- vMOD_default * ES_Pset_ID$vMOD_x[1]
    beta <- beta_default * ES_Pset_ID$beta_x[1]
-   #beta <- c(beta_default[1] * ES_Pset_ID$beta_r[1], beta_default[2] * ES_Pset_ID$beta_k[1])
    vMOD <<- c(vMOD_default[1] * ES_Pset_ID$vMOD_m[1], vMOD_default[2] * ES_Pset_ID$vMOD_s[1], vMOD_default[3], vMOD_default[4] * ES_Pset_ID$vMOD_m[1], vMOD_default[5] * ES_Pset_ID$vMOD_s[1], vMOD_default[6])
   SM = c("mean", "max", "min")
   for (SM_type2 in SM) {
@@ -242,86 +142,21 @@ for (i in Pset_ID) {
     for (bag_type in LQ) {
       BAGS_mean <- filter(BAGS, TYPE==bag_type)
       MSBio_sites_in$LIG_N = MSBio_sites_in[[bag_type]]
-      for (site in Mic_sites) {
+      for (site in site_val) {
         BAGS_input <- filter(BAGS_mean, SITE == site)
         forcing_input <- filter(MSBio_sites_in, SITE == site)
         daily_input <- filter(DailyInput_in, SITE == site)
         BO_DI <- MIMICS_LITBAG(forcing_df = forcing_input, litBAG = BAGS_input, dailyInput = daily_input, nspin_yrs=3, nspin_days=0, litadd_day=315, verbose=T)
-        BAGS_out_AllSites_Cal <- rbind(BAGS_out_AllSites_Cal,BO_DI)
+        BAGS_out_AllSites_ES_val <- rbind(BAGS_out_AllSites_ES_val,BO_DI)
       }
     }
   }
 }
 
-#write.csv(BAGS_out_AllSites_ES, "BO_NI_vMODms.csv")
-#write.csv(BAGS_out_AllSites_ES2, "BO_looseES.csv")
-
-# #testing pset multiplier loop - working besides beta which cannot be changed for some reason....
-# RWA_Psets <- read.csv('RWA_Psets_MinMax.csv')
-# ES_Psets <- read.csv('ES_Psets_MinMax.csv')
-# BAGS_out_AllSites_test = data.frame()
-# forcing_BART=filter(MSBio_sites_SM, SITE == 'BART' & SM_type=='mean')
-# BAGS_Sp1=filter(BAGS, SITE == 'BART' & TYPE=='LIG_N_sp1')
-# daily_mean=filter(DailyInput_SM, SITE == 'BART' & SM_type=='mean')
-# Pset_ID <- ES_Psets$ID
-# for (i in Pset_ID) {
-#   ES_Pset_ID <- filter(ES_Psets, ID == i)
-#   print(i) #tracking pset
-#   tau_r <<- c(tau_r_default[1], tau_r_default[2] * ES_Pset_ID$Tau_r[1])
-#   tau_K <<- c(tau_K_default[1], tau_K_default[2] * ES_Pset_ID$Tau_K[1])
-#   CUE <<- CUE_default * ES_Pset_ID$CUE_x[1]
-#   vMOD <<- vMOD_default * ES_Pset_ID$vMOD_x[1]
-#   beta <- beta_default * ES_Pset_ID$beta_x[1] #works without double-headed arrow, not sure why double-headed arrow isn't working
-#   BO_DI <- MIMICS_LITBAG(forcing_df = forcing_BART, litBAG = BAGS_Sp1, dailyInput = daily_mean, nspin_yrs=1, nspin_days=0, litadd_day=10, verbose=T)
-#   BAGS_out_AllSites_test <- rbind(BAGS_out_AllSites_test,BO_DI)
-# }
 
 
 
 
-# LQ = c("LIG_N_sp1", "LIG_N_sp2", "LIG_N_sp3")
-# for (bag_type in LQ) {
-#   BAGS_mean <- filter(BAGS, TYPE==bag_type)
-#   MSBio_sites_in$LIG_N = MSBio_sites_in[[bag_type]]
-#   print(MSBio_sites_in$LIG_N)
-# }
-
-# #just LQ
-# BAGS_out_AllSites_var = data.frame()
-# LQ = c("LIG_N", "LIG_N_max", "LIG_N_min")
-# for (bag_type in LQ) {
-#   BAGS_mean <- filter(BAGS, TYPE==bag_type)
-#   for (site in Mic_sites) {
-#     BAGS_input <- filter(BAGS_mean, SITE == site)
-#     forcing_input <- filter(MSBio_sites, SITE == site)
-#     daily_input <- filter(DailyInput, SITE == site)
-#     BO_DI <- MIMICS_LITBAG(forcing_df = forcing_input, litBAG = BAGS_input, dailyInput = daily_input, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T)
-#     BAGS_out_AllSites_var <- rbind(BAGS_out_AllSites_var,BO_DI)
-#   }
-# }
-# 
-# 
-# #just one site soil moisture loop
-#   BAGS_out_AllSites_test = data.frame()
-#   SM = c("mean", "max", "min")
-#   for (SM_type2 in SM) {
-#     MSBio_sites_in <- filter(MSBio_sites_SM, SM_type==SM_type2)
-#     DailyInput_in <- filter(DailyInput_SM, SM_type==SM_type2)
-#       BAGS_mean <- filter(BAGS, TYPE=="LIG_N")
-#       BAGS_input <- filter(BAGS_mean, SITE == "BART")
-#         forcing_input <- filter(MSBio_sites_in, SITE == "BART")
-#         daily_input <- filter(DailyInput_in, SITE == "BART")
-#         BO_DI <- MIMICS_LITBAG(forcing_df = forcing_input, litBAG = BAGS_input, dailyInput = daily_input, nspin_yrs=0.5, nspin_days=0, litadd_day=10, verbose=T)
-#         BAGS_out_AllSites_test <- rbind(BAGS_out_AllSites_test,BO_DI)
-#       }
-# 
-#   #just one site daily input
-#   BAGS_mean <- filter(BAGS, TYPE=="LIG_N")
-#   BAGS_input <- filter(BAGS_mean, SITE == "BART")
-#   forcing_input <- filter(MSBio_sites, SITE == "BART")
-#   daily_input <- filter(DailyInput, SITE ==  "BART")
-#   BO_BART <- MIMICS_LITBAG(forcing_df = forcing_input, litBAG = BAGS_input, dailyInput = daily_input, nspin_yrs=2, nspin_days=0, litadd_day=10, verbose=T) 
-#   
   
 ####
 #plot output
@@ -329,7 +164,6 @@ for (i in Pset_ID) {
 
 colorBlind7  <- c("#E69F00", "#56B4E9", "#009E73",
                   "#F0E442", "#0072B2", "#D55E00", "#CC79A7") #yellow (LENO), blue (SERC), green (UNDE)
-MSBio_palette <- c("#313695", "#4575B4", "#74ADD1", "#FDAE61", "#F46D43", "#D73027", "#A50026") #temperature color order
 
 #Formating observational data for comparing to field litter mass loss
 Field_LML <- read.csv("Example_simulations/Data/Litter_decomp_all.csv")
@@ -348,7 +182,7 @@ LML_sum2 <- Field_LML  %>% group_by(site, time.point) %>% drop_na(percent.loss.l
   min.ML = min(percent.loss.litter*100),
   max.ML = max(percent.loss.litter*100),
   doy = mean(days_elapsed)) %>% mutate(doy=round(doy, digits=0)) %>%
-filter(site %in% Mic_sites)
+filter(site %in% site_val)
 
 
 #comparison of baseline MIMICS to LML
@@ -358,17 +192,10 @@ filter(site %in% Mic_sites)
 #boxplot(LIT_init$LITi)
 #BAGS_out_AllSites_ES_vMOD_noTk$ID <- as.factor(rep(1:12, each=68985)) #not lining up with numerically with what I would expect - not sure what's going on.... ES one worked so even weirder!
 # #try counting each site and see if each site is repeated the same number of times!
-#BO_ES_1 <- readRDS("Analysis/MC_Output/BAGS_out_AllSites_ES_5000_NewInputs_10_1.rds") %>% select(-4, -5, -6, -7) %>% mutate(ID=rep(1:100, each=68985))
-#BO_ES_2 <- readRDS("Analysis/MC_Output/BAGS_out_AllSites_ES_5000_NewInputs_10_2.rds") %>% select(-4, -5, -6, -7) %>%  mutate(ID=rep(101:190, each=68985))
-#BO_ES_3 <- readRDS("Analysis/MC_Output/BAGS_out_AllSites_ES_5000_NewInputs_3.rds") %>% select(-4, -5, -6, -7) %>%  mutate(ID=rep(201:300, each=68985))
-#BO_ES_4 <- readRDS("Analysis/MC_Output/BAGS_out_AllSites_ES_5000_NewInputs_4.rds") %>% select(-4, -5, -6, -7) %>%  mutate(ID=rep(301:388, each=68985))
-#BAGS_out_AllSites_ES <- rbind(BO_ES_1, BO_ES_2)
-#BAGS_out_AllSites_ES_best <- BAGS_out_AllSites_ES %>% filter(ID==241 | ID== 282 | ID== 48)
-BAGS_out_AllSites_Cal <- BAGS_out_AllSites_Cal %>% mutate(ID=as.factor(rep(c(175, 176, 190), each=68985)))
-#BAGS_out_AllSites_ES_NoCUE2 <- BAGS_out_AllSites_ES_NoCUE[ , -c(4:7)] #removing duplicate column names
+BAGS_out_AllSites_ES_val$ID <- as.factor(rep(1:3, each=29565))
 # BAGS_out_AllSites_test$ID <- as.factor(1:18)
 # ID_test <- filter(BAGS_out_AllSites_test, DAY==50)
-BAGS_out_plot <- BAGS_out_AllSites_SP %>% mutate(SITE.LT = paste(SITE, Litter_Type, sep=".")) %>% mutate(LIT_PerLoss = ((0.1 - (LITBAGm+LITBAGs))/0.1)*100)
+BAGS_out_plot <- BAGS_out_AllSites_ES_val %>% mutate(SITE.LT = paste(SITE, Litter_Type, sep=".")) %>% mutate(LIT_PerLoss = ((0.1 - (LITBAGm+LITBAGs))/0.1)*100)
 #wide format for plotting
 BAGS_out_wide = BAGS_out_plot %>% select(SITE, ID, Litter_Type, SM_Type, DAY, LIT_PerLoss) %>% #ID, 
   pivot_wider(names_from = Litter_Type, values_from = LIT_PerLoss)
@@ -387,10 +214,8 @@ ggplot() +
   facet_wrap(.~SM_Type) +
   theme_bw(base_size = 20)
 #summary data - works ok for visualization!
-BO_plot_sum <- BAGS_out_plot %>% group_by(SITE,DAY) %>% summarise(mean=mean(LIT_PerLoss), min=min(LIT_PerLoss), max=max(LIT_PerLoss)) #,SM_Type
-# filter(ID==215 | ID== 71 | ID==227 | ID==38 | ID==164 | ID==21) %>%
-BO_plot_sum <- BO_plot_sum %>% mutate(SITE=factor(SITE, levels=c("TREE", "BART", "HARV", "GRSM", "SERC", "TALL", "LENO"))) #MAT order
-LML_sum2 <- LML_sum2 %>% mutate(site=factor(site, levels=c("TREE", "BART", "HARV", "GRSM", "SERC", "TALL", "LENO"))) #MAT order
+val_colors = c("#882255", "#999933", "#332288")
+BO_plot_sum <- BAGS_out_plot  %>% group_by(SITE,DAY) %>% summarise(mean=mean(LIT_PerLoss), min=min(LIT_PerLoss), max=max(LIT_PerLoss)) #,SM_Type
 ggplot() +
   geom_ribbon(data=BO_plot_sum, aes(y=100-mean, x=DAY-315, ymin = 100-min, ymax=100-max, group=SITE, fill=SITE), alpha = 0.3) +
   #geom_line(data=BO_plot_sum, aes(y=100-mean, x=DAY-315, group=SITE, color=SITE), linewidth=2, alpha = 0.3) +
@@ -399,16 +224,15 @@ ggplot() +
   ylab("Litter Bag C Remaining (%)") +
   xlab("Day") +
   xlim(0, 780) +
-  scale_color_manual(values = colorBlind7) +
-  scale_fill_manual(values = colorBlind7) +
-  theme_bw(base_size = 20) #+
+  theme_bw(base_size = 20) +
+  scale_color_manual(values=val_colors) + scale_fill_manual(values=val_colors) #+
   #facet_wrap(.~SM_Type)
 #seperate plotting of LITm and LITs
-LIT_init <- BO_NC_best %>% filter(DAY == 315) %>% mutate(LITm.i = LITBAGm) %>% mutate(LITs.i = LITBAGs) %>% 
+LIT_init <- BAGS_out_AllSites_SP %>% filter(DAY == 315) %>% mutate(LITm.i = LITBAGm) %>% mutate(LITs.i = LITBAGs) %>% 
   mutate(SITE.LT.SM = paste(SITE, Litter_Type, SM_Type,ID, sep=".")) %>% select(SITE.LT.SM, LITm.i, LITs.i)
-BAGS_out_plot <- BO_NC_best %>% mutate(SITE.LT.SM = paste(SITE, Litter_Type, SM_Type,ID, sep=".")) %>% inner_join(LIT_init, by="SITE.LT.SM") %>%
-  mutate(LITm_PerLoss = ((LITm.i - (LITBAGm))/LITm.i)*100) %>% mutate(LITs_PerLoss = ((LITs.i - (LITBAGs))/LITs.i)*100) %>%
-  filter(ID==68)
+BAGS_out_plot <- BAGS_out_AllSites_SP %>% mutate(SITE.LT.SM = paste(SITE, Litter_Type, SM_Type,ID, sep=".")) %>% inner_join(LIT_init, by="SITE.LT.SM") %>%
+  mutate(LITm_PerLoss = ((LITm.i - (LITBAGm))/LITm.i)*100) %>% mutate(LITs_PerLoss = ((LITs.i - (LITBAGs))/LITs.i)*100) #%>%
+  #filter(ID==20)
 #plotting
 BO_plot_sum.ms <- BAGS_out_plot %>% group_by(SITE,DAY) %>% summarise(mean.m=mean(LITm_PerLoss), min.m=min(LITm_PerLoss), max.m=max(LITm_PerLoss), 
                                                                              mean.s=mean(LITs_PerLoss), min.s=min(LITs_PerLoss), max.s=max(LITs_PerLoss)) %>%
@@ -427,148 +251,6 @@ ggplot() +
   theme_bw(base_size = 20)
 
 
-#looking at model output to see how calibrated differs from starting point model
-#regressing SP vs calibrated
-BAGS_out_AllSites_ES176 <- filter(BAGS_out_AllSites_Cal, ID==176) %>% select(-ID) #missing decomp rates! Need these for analyzing differences 
-BAGS_out_AllSites_ES175 <- filter(BAGS_out_AllSites_Cal, ID==175) %>% select(-ID)
-BAGS_out_AllSites_ES190 <- filter(BAGS_out_AllSites_Cal, ID==190) %>% select(-ID)
-BO_initial_SP <- BAGS_out_AllSites_SP %>% filter(DAY==315) %>% mutate(MICrK = MICr/MICk, LITms = LITm/LITs) %>% pivot_longer(5:19, names_to = 'Pools', values_to = 'Carbon_SP') %>% 
-  mutate(ID=1:length(Carbon_SP)) %>% select(Carbon_SP, ID)
-BO_initial_CE <- BAGS_out_AllSites_ES175 %>% filter(DAY==315) %>% mutate(MICrK = MICr/MICk, LITms = LITm/LITs) %>% pivot_longer(5:19, names_to = 'Pools', values_to = 'Carbon_CE') %>% mutate(ID=1:length(Carbon_CE))
-BAGS2 <- BAGS %>% mutate(SITE.LQ = paste(SITE, TYPE, sep=".")) %>% select(SITE.LQ, CALC_MET)
-BO_initial175 <- inner_join(BO_initial_SP, BO_initial_CE, by='ID') %>% mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% inner_join(BAGS2, by="SITE.LQ")
-low_pools <- c("LITm", "LITms", "MICk", "MICr")
-BO_initial %>% filter(Pools %in% low_pools) %>% ggplot(aes(x=Carbon_SP, y=Carbon_CE)) + geom_point(aes(color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + facet_grid(.~Pools) + 
-  geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16)
-high_pools <- c("LITs", "SOMa", "SOMc", "SOMp") #"MICrK", 
-BO_initial %>% filter(Pools %in% high_pools) %>% ggplot(aes(x=Carbon_SP, y=Carbon_CE)) + geom_point(aes(color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + facet_grid(.~Pools) + 
-  geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16)
-MICrK_pool <- c("MICrK") 
-BO_initial175 %>% filter(Pools %in% MICrK_pool) %>% ggplot(aes(x=Carbon_SP, y=Carbon_CE)) + geom_point(aes(color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + facet_grid(.~Pools) + 
-  geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16)
-#combining all into one plot
-BO_initial_sum <- rbind(BO_initial175, BO_initial176, BO_initial190) %>% group_by(SITE, Litter_Type, CALC_MET, SM_Type, Pools) %>% 
-  summarise(sp.avg =mean(Carbon_SP), cal.avg =mean(Carbon_CE), n=n(),
-  lci.sp = sp.avg - qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_SP)/sqrt(n)), uci.sp = sp.avg + qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_SP)/sqrt(n)),
-  lci.cal = cal.avg - qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_CE)/sqrt(n)), uci.cal = cal.avg + qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_CE)/sqrt(n)))
-LITm_pool <- c("LITm")
-BO_initial_sum %>% filter(Pools %in% LITm_pool) %>% ggplot() + geom_point(aes(x=sp.avg, y=cal.avg, color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + 
-  ylab(expression(paste("Calibrated model C (kg C m"^"-2"*")"))) + xlab(expression(paste("Default model C (kg C m"^"-2"*")"))) +
-  facet_grid(.~Pools) + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16)
-  #geom_errorbar(aes(x=sp.avg, y=cal.avg, ymin=lci.cal, ymax=uci.cal)) +
-high_pools <- c("LITs", "SOMa", "SOMc")
-BO_initial_sum %>% filter(Pools %in% high_pools) %>% ggplot() + geom_point(aes(x=sp.avg, y=cal.avg, color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + 
-  ylab(expression(paste("Calibrated model C (kg C m"^"-2"*")"))) + xlab(expression(paste("Default model C (kg C m"^"-2"*")"))) +
-  facet_grid(.~Pools) + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16)
-MICrK_pool <- c("MICrK")
-BO_initial_sum %>% filter(Pools %in% MICrK_pool) %>% ggplot() + geom_point(aes(x=sp.avg, y=cal.avg, color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + 
-  ylab("Calibrated model") + xlab("Default model") + xlab("Copiotroph:oligotroph") + ylab("Copiotroph:oligotroph") +
-  facet_grid(.~Pools) + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16)
-#decomposition rates
-#scaled by microbial biomass or initial litter - checked and the same for any calibration
-LB.i <- BAGS_out_AllSites_SP %>% filter(DAY==315) %>% mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% group_by(SITE.LQ) %>% 
-                                                               summarise(LBm.i = mean(LITBAGm), LBs.i = mean(LITBAGs))
-BO_Decomp_SP <- BAGS_out_AllSites_SP %>% mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% filter(DAY>315) %>%#inner_join(LB.i, by="SITE.LQ") %>% filter(DAY>315) %>% 
-  group_by(SITE,Litter_Type, SM_Type) %>%  #inner_join(BAGS2, by="SITE.LQ") %>% 
-  summarise(Drm = mean(Decomp_rate_rm/MICr), Drs = mean(Decomp_rate_rs/MICr), 
-  Dkm = mean(Decomp_rate_km/MICk), Dks = mean(Decomp_rate_ks/MICk)) %>% 
-  pivot_longer(4:7, names_to = 'Pools', values_to = 'Carbon_SP') %>% #ggplot(aes(x=DAY, y=Carbon_SP)) + geom_point(aes(color=CALC_MET)) + facet_grid(.~Pools)
-  mutate(combo = paste(SITE, Litter_Type, SM_Type, Pools, sep=".")) %>% select(Carbon_SP, combo)
-BO_Decomp_CE <- BAGS_out_AllSites_ES175 %>% filter(DAY>315) %>% #mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% inner_join(LB.i, by="SITE.LQ") %>% 
-  group_by(SITE, Litter_Type, SM_Type) %>%
-  summarise(Drm = mean(Decomp_rate_rm/MICr), Drs = mean(Decomp_rate_rs/MICr), Dkm = mean(Decomp_rate_km/MICk), Dks = mean(Decomp_rate_ks/MICk)) %>% 
-  pivot_longer(4:7, names_to = 'Pools', values_to = 'Carbon_CE') %>% 
-  mutate(combo = paste(SITE, Litter_Type, SM_Type, Pools, sep="."))
-BAGS2 <- BAGS %>% mutate(SITE.LQ = paste(SITE, TYPE, sep=".")) %>% select(SITE.LQ, CALC_MET)
-BO_decomp175 <- inner_join(BO_Decomp_SP, BO_Decomp_CE, by='combo') %>% mutate(SITE.LQ = paste(SITE.x, Litter_Type.x, sep=".")) %>% inner_join(BAGS2, by="SITE.LQ")
-BO_decomp190 %>% filter(Pools=="Dks") %>% ggplot(aes(x=Carbon_SP, y=Carbon_CE)) + geom_point(aes(color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + facet_grid(.~Pools) + 
-  geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) #filter(Pools=="Dkm") %>%
-#means of BOs
-BO_decomp_sum <- rbind(BO_decomp175, BO_decomp176, BO_decomp190) %>% group_by(SITE.x, Litter_Type.x, CALC_MET, SM_Type, Pools) %>% 
-  summarise(sp.avg =mean(Carbon_SP), cal.avg =mean(Carbon_CE), n=n(),
-            lci.sp = sp.avg - qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_SP)/sqrt(n)), uci.sp = sp.avg + qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_SP)/sqrt(n)),
-            lci.cal = cal.avg - qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_CE)/sqrt(n)), uci.cal = cal.avg + qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_CE)/sqrt(n)))
-BO_decomp_sum %>% filter(Pools=="Drs") %>% ggplot(aes(x=sp.avg, y=cal.avg)) + geom_point(aes(color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + facet_grid(.~Pools) + 
-  geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) + theme(legend.position="none") +
-  xlab(expression(paste("Specific decomposition (hr"^"-1"*")"))) + ylab(expression(paste("Specific decomposition (hr"^"-1"*")"))) #filter(Pools=="Dkm") %>%
-#overall mean decomp rate
-BO_decomp %>% group_by(SITE.x,Litter_Type.x, SM_Type) %>% summarise(decomp.SP = mean(Carbon_SP), decomp.CE = mean(Carbon_CE), fMET=mean(CALC_MET)) %>%
-  ggplot(aes(x=decomp.SP, y=decomp.CE)) + geom_point(aes(color=fMET, shape=SM_Type), alpha=0.5, size=3) + 
-  geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) 
-#decomp rate not relativized
-BO_Decomp_SP2 <- BAGS_out_AllSites_SP %>% mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% inner_join(LB.i, by="SITE.LQ") %>% filter(DAY>315) %>% 
-  group_by(SITE,Litter_Type, SM_Type) %>% summarise(Drm = mean(Decomp_rate_rm), Drs = mean(Decomp_rate_rs), 
-            Dkm = mean(Decomp_rate_km), Dks = mean(Decomp_rate_ks)) %>% 
-  pivot_longer(4:7, names_to = 'Pools', values_to = 'Carbon_SP') %>% 
-  mutate(combo = paste(SITE, Litter_Type, SM_Type, Pools, sep=".")) %>% select(Carbon_SP, combo)
-BO_Decomp_CE2 <- BAGS_out_AllSites_CalES %>% filter(DAY>315) %>% mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% inner_join(LB.i, by="SITE.LQ") %>% group_by(SITE, Litter_Type, SM_Type) %>%
-  summarise(Drm = mean(Decomp_rate_rm), Drs = mean(Decomp_rate_rs), Dkm = mean(Decomp_rate_km), Dks = mean(Decomp_rate_ks)) %>% 
-  pivot_longer(4:7, names_to = 'Pools', values_to = 'Carbon_CE') %>% 
-  mutate(combo = paste(SITE, Litter_Type, SM_Type, Pools, sep="."))
-BO_decomp2 <- inner_join(BO_Decomp_SP2, BO_Decomp_CE2, by='combo') %>% mutate(SITE.LQ = paste(SITE.x, Litter_Type.x, sep=".")) %>% inner_join(BAGS2, by="SITE.LQ")
-BO_decomp2 %>% group_by(SITE.x,Litter_Type.x, SM_Type) %>% summarise(decomp.SP = mean(Carbon_SP), decomp.CE = mean(Carbon_CE), fMET=mean(CALC_MET)) %>%
-  ggplot(aes(x=decomp.SP, y=decomp.CE)) + geom_point(aes(color=fMET), alpha=0.5, size=3) + #facet_grid(.~Pools) + 
-  geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) #filter(Pools=="Dkm") %>%
-#relationships between variables 
-BAGS_out_AllSites_ES190 %>% filter(DAY==315) %>% mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% inner_join(BAGS2, by="SITE.LQ") %>%
-  ggplot(aes(y=MICr/MICk, x=CALC_MET)) + geom_point(aes(color=LITm/LITs, shape=SM_Type), alpha=0.5, size=3) + ylim(0,3) #+ xlim(0.05,0.25)#color=CALC_MET, 
-MSBio_SM <- MSBio_sites_SM %>% mutate(SITE.SM = paste(SITE, SM_type, sep="."))
-BAGS_out_AllSites_ES190 %>% filter(DAY==315) %>% mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>%  inner_join(BAGS2, by="SITE.LQ") %>% mutate(SITE.SM = paste(SITE, SM_Type, sep=".")) %>% 
-  inner_join(MSBio_SM, by="SITE.SM") %>% mutate(fct=cut(CALC_MET, breaks=c(0,0.4,0.5, 0.75), labels=c("low fMET","mid fMET","high fMET"))) %>% 
-  ggplot(aes(y=MICr/MICk, x=TSOI)) + geom_point(aes(color=W_SCALAR2), alpha=0.5, size=3) +ylim(0,3) + facet_grid(.~fct) #aes(color=CALC_MET, shape=SM_Type), 
-BO_i_rK <- BO_initial %>% filter(Carbon_CE >0) %>% mutate(SITE.SM = paste(SITE, SM_Type, sep=".")) %>% inner_join(MSBio_SM, by="SITE.SM") %>% mutate(SITE = SITE.x) %>% filter(Pools == "MICrK")
-BOi_CE <- lmer(Carbon_CE ~ CALC_MET*TSOI*W_SCALAR2 + (1|SITE), data=BO_i_rK)
-summary(BOi_CE)
-#Looking at the spread of an individual pool
-#LITms
-# BAGS_out_AllSites_SP %>% filter(DAY==315) %>% mutate(LITms = LITm/LITs) %>%
-#   mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% inner_join(BAGS2, by="SITE.LQ") %>%
-#   ggplot() + geom_point(aes(y=LITms, x=SITE, color=CALC_MET, shape=SM_Type), size=3, alpha=0.5) +
-#   scale_x_discrete(guide = guide_axis(angle = 90)) + theme_bw(base_size = 16) #+ ylim(0.03,0.2)
-# #MICrK
-# BAGS_out_AllSites_SP%>% filter(DAY==315) %>% mutate(MICrk = MICr/MICk) %>%
-#   mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% inner_join(BAGS2, by="SITE.LQ") %>%
-#   ggplot() + geom_point(aes(y=MICrk, x=SITE, color=CALC_MET, shape=SM_Type), size=3, alpha=0.5) +
-#   scale_x_discrete(guide = guide_axis(angle = 90)) + theme_bw(base_size = 16) #+ ylim(0.03,0.2)
-#comparing seasonality of decomp
-# temp_order = c('TREE', 'BART', 'HARV', 'GRSM', 'SERC', 'TALL', 'LENO')
-# BAGS_out_AllSites_SP %>% filter(DAY > 314 & DAY < 679) %>%  group_by(SITE,DAY) %>% summarise(min.MICr=min(MICr), max.MICr=max(MICr),min.MICk=min(MICk), max.MICk=max(MICk),
-#                                                                               min.LBm=min(LITBAGm), max.LBm=max(LITBAGm),min.LBs=min(LITBAGs), max.LBs=max(LITBAGs)) %>%
-#   mutate(SITE = factor(SITE, levels=temp_order)) %>%
-#   ggplot() + geom_ribbon(aes(ymin=min.MICr,ymax=max.MICr, x=DAY, fill ="MICr"), alpha=0.7) +
-#   geom_ribbon(aes(ymin=min.MICk, ymax=max.MICk, x=DAY, fill ="MICk"), alpha=0.7) + geom_ribbon(aes(ymin=min.LBm, ymax=max.LBm, x=DAY, fill ="LITBAGm"), alpha=0.7) +
-#   geom_ribbon(aes(ymin=min.LBs, ymax=max.LBs, x=DAY, fill ="LITBAGs"), alpha=0.7) + facet_grid(.~SITE) + ylim(0, 0.3)
-# #variation in relationship between r:K and m:s over time
-# BAGS_out_AllSites_CalES.13 %>% mutate(MICrK=MICr/MICk) %>% mutate(LITms = LITm/LITs) %>% group_by(DAY) %>% summarise(slope = lm(LITms ~ MICrK)$coefficients[2]) %>%
-#   ggplot(aes(x=DAY, y=slope)) +geom_point() +theme_bw(base_size = 16)
-# BO.MicRange.SP <- BAGS_out_AllSites_SP %>% filter(DAY > 314 & DAY < 679) %>%  group_by(SITE) %>% summarise(min.MICr=min(MICr), max.MICr=max(MICr),
-#                                                                                             min.MICk=min(MICk), max.MICk=max(MICk))%>%
-#   mutate(SITE = factor(SITE, levels=temp_order)) %>% mutate(MICr.range.SP = max.MICr-min.MICr, MICk.range.SP = max.MICk-min.MICk) %>%
-#   select(SITE, MICr.range.SP, MICk.range.SP)
-# BO.MicRange <-BAGS_out_AllSites_CalES %>% filter(DAY > 314 & DAY < 679) %>%  group_by(SITE) %>% summarise(min.MICr=min(MICr), max.MICr=max(MICr),
-#                                                                                             min.MICk=min(MICk), max.MICk=max(MICk))%>%
-#   mutate(SITE = factor(SITE, levels=temp_order)) %>% mutate(MICr.range.CE = max.MICr-min.MICr, MICk.range.CE = max.MICk-min.MICk) %>%
-#   select(SITE, MICr.range.CE, MICk.range.CE) %>% inner_join(BO.MicRange.SP, by="SITE")
-# ggplot(BO.MicRange) + geom_point(aes(y=MICr.range.SP, x=SITE, color="MICr", shape="SP"), size=3, alpha=0.7) + geom_point(aes(y=MICk.range.SP, x=SITE, color="MICk", shape="SP"), size=3, alpha=0.7) +
-#   geom_point(aes(y=MICr.range.CE, x=SITE, color="MICr", shape="CE"), size=3, alpha=0.7) + geom_point(aes(y=MICk.range.CE, x=SITE, color="MICk", shape="CE"), size=3, alpha=0.7) +
-#   ylab('Mic range') + theme_bw(base_size = 16)
-#comparing decomposition rates between model runs for more interpreatble output
-# BO_DecompRate_SP  <- BAGS_out_AllSites_SP %>% filter(DAY == 315 | DAY== 679) %>%  mutate(DAY.TYPE = ifelse(DAY==315, "start", "end")) %>% select(SITE, Litter_Type, SM_Type, DAY.TYPE, LITBAGs) %>%
-#   pivot_wider(names_from = DAY.TYPE, values_from = LITBAGs) %>% mutate(LITs.rate_SP = (end-start)/315) %>% mutate(ID = paste(SITE, Litter_Type, SM_Type, sep=".")) %>% 
-#   select(ID, LITs.rate_SP) #315, 679
-# BO_DecompRate <- BAGS_out_AllSites_CalES.noTk.9 %>% filter(DAY == 315 | DAY== 679) %>%  mutate(DAY.TYPE = ifelse(DAY==315, "start", "end")) %>% select(SITE, Litter_Type, SM_Type, DAY.TYPE, LITBAGs) %>%
-#   pivot_wider(names_from = DAY.TYPE, values_from = LITBAGs) %>% mutate(LITs.rate_Cal = (end-start)/315) %>% mutate(ID = paste(SITE, Litter_Type, SM_Type, sep=".")) %>% 
-#   select(ID, SITE, Litter_Type, SM_Type, LITs.rate_Cal) %>% inner_join(BO_DecompRate_SP, by='ID') %>% 
-#   mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% inner_join(BAGS2, by="SITE.LQ")
-# site_shapes <- c(16, 15, 17, 18, 8, 3, 10)
-# ggplot(BO_DecompRate, aes(x=LITs.rate_SP, y=LITs.rate_Cal)) + geom_point(aes(color=CALC_MET, shape=SITE), alpha=0.7, size=3) + 
-#   geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) + scale_shape_manual(values=site_shapes)
-# BO_initial.rk <- BO_initial %>% filter(Pools == "MICrK") %>% mutate(ID = as.character(paste(SITE, Litter_Type, SM_Type, sep=".")))
-# BO_MB_SP <- BAGS_out_AllSites_SP %>% filter(DAY==315) %>% mutate(MIC.SP = MICr+MICk) %>% mutate(ID = paste(SITE, Litter_Type, SM_Type, sep = ".")) %>% select(ID, MIC.SP)
-# BO_MB <- BAGS_out_AllSites_CalES.noTk.9 %>% filter(DAY==315) %>% mutate(MIC.CE = MICr+MICk) %>% mutate(ID = paste(SITE, Litter_Type, SM_Type, sep = ".")) %>% inner_join(BO_MB_SP, by="ID")  %>% select(ID, MIC.SP, MIC.CE)
-# BO_DecompRate %>% inner_join(BO_MB, by="ID") %>% ggplot() + geom_point(aes(x=MIC.CE, y=LITs.rate_Cal, color=CALC_MET), size=3, alpha=0.7) + 
-#   theme_bw(base_size = 16) + ylim(-0.0002, 0) +  xlim(0.05,0.25) #+ xlab("Initial MICr:MICK")
-
 # #formating data for modelVobs, RWA, and effect size
 #need to standardize and log this data before running it thru again
 #MFG_stdzd <- MFG_analysis %>% mutate_at(c('C_O', 'LIG_N', 'log.vwc'), ~(scale(.) %>% as.vector))
@@ -578,9 +260,9 @@ FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(S
 #df <- BAGS_out_AllSites_DI %>% left_join(LIT_init, by = "SITE")
 #BAGS_out_AllSites_ES_noTk$ID <- as.factor(rep(1:12, each=68985))
 LITi = 0.1
-df_LML <- BAGS_out_AllSites_Cal %>% mutate(DAY.LitOut = DAY -314) %>% mutate(SITE.DAY=paste(SITE, DAY.LitOut, sep=".")) %>% 
+df_LML <- BAGS_out_AllSites_SP %>% mutate(DAY.LitOut = DAY -314) %>% mutate(SITE.DAY=paste(SITE, DAY.LitOut, sep=".")) %>% 
   right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
-#write.csv(df_LML, 'df_LML_ES_vMOD_noTk_ParamUncert.csv')
+#write.csv#write.csv#write.csv(df_LML, 'df_LML_ES_vMOD_noTk_ParamUncert.csv')
 #creating table with LML for each day
 # df_LML_All <- BAGS_out_AllSites_var %>% filter(DAY>315) %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
 # #filtering so each site only has days for which we have observations 
@@ -597,10 +279,9 @@ modelVobs <- lm(LIT_PerLoss~mean.ML, data=df_LML)
 summary(modelVobs)
 #RMSE
 sqrt(mean((df_LML$mean.ML - df_LML$LIT_PerLoss)^2))
+#bias
+(1/length(df_LML$mean.ML))*sum(df_LML$mean.ML - df_LML$LIT_PerLoss)
 #loop for muliple Psets
-#df_LML2 <- df_LML %>% inner_join(ES_Psets, by="ID")
-#rn_filter = c(1:4500)
-#df_LML2 <- df_LML2 %>% filter(run_num %in% rn_filter)
 ID <- unique(df_LML$ID)
 ES_fit <- data.frame()
 for (i in ID) {
@@ -620,8 +301,7 @@ for (i in ID) {
   fit <- data.frame(i, aR2, RMSE)
   ES_fit <- rbind(ES_fit, fit)
 }
-df_LML_best <- filter(df_LML, ID== 176 | ID==175 | ID==190| ID==108| ID==21) #ID== 176 | ID==175 | ID==190| 
-#summarized values
+df_LML_best <- filter(df_LML, ID == 4)
 df_LML_sum <- df_LML %>% group_by(SITE, time.point) %>% summarise(mean.ML = mean(mean.ML), m.uci.ML = mean(uci.ML), m.lci.ML = mean(lci.ML), mean.LPL = mean(LIT_PerLoss),
                                                                        n=n(), SE = sd(LIT_PerLoss)/sqrt(n),
                                                                        min.LPL = min(LIT_PerLoss),
@@ -629,19 +309,14 @@ df_LML_sum <- df_LML %>% group_by(SITE, time.point) %>% summarise(mean.ML = mean
                                                                        lci.LPL = mean.LPL - qt(1 - ((1 - 0.95) / 2), n - 1) * SE,
                                                                        uci.LPL = mean.LPL + qt(1 - ((1 - 0.95) / 2), n - 1) * SE)
 modelVobs <- lm(mean.LPL~mean.ML, data=df_LML_sum)
-summary(modelVobs)
+summary(modelVobs) #R2
 sqrt(mean((df_LML_sum$mean.ML - df_LML_sum$mean.LPL)^2)) #RMSE
 (1/length(df_LML_sum$n))*sum(df_LML_sum$mean.ML - df_LML_sum$mean.LPL) #bias
-df_LML_sum <- df_LML_sum %>% mutate(SITE=factor(SITE, levels=c("TREE", "BART", "HARV", "GRSM", "SERC", "TALL", "LENO"))) #MAT order
+val_colors = c("#882255", "#999933", "#332288")
 ggplot(df_LML_sum, aes(x=mean.ML, y=mean.LPL)) + geom_point(aes(color=SITE), size=4) + geom_smooth(method = "lm", color="black")  + xlim(0,80) + ylim(0,80) +
   geom_errorbar(aes(ymin=lci.LPL, ymax=uci.LPL, color=SITE), size=1) + geom_errorbarh(aes(xmin=m.lci.ML, xmax=m.uci.ML, color=SITE), size=1) +
-  xlab("Observed litter percent C loss") + ylab("Modeled litter percent C loss") + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) + 
-  scale_color_manual(values = colorBlind7)
-
-#checking paramter relationships of top Psets
-ES_fit_best <- ES_fit %>% filter(RMSE>5.3 & RMSE < 5.8) %>% filter(i != 48) %>% filter(i != 107) %>% mutate(ID=i) %>% inner_join(ES_Psets_all, by='ID')
-plot(ES_fit_best$beta_x, ES_fit_best$Tau_r)
-
+  xlab("Observed litter percent C loss") + ylab("Modeled litter percent C loss") + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) +
+  scale_color_manual(values = val_colors)
 
 
 ####
@@ -655,18 +330,17 @@ plot(ES_fit_best$beta_x, ES_fit_best$Tau_r)
 #   mutate(SITE.DAY = paste(SITE, DAY, sep = ".")) %>% inner_join(DI_analysis, by="SITE.DAY") #%>% filter(time.point==2)
 #OPTION 2: mean daily input model output analysis 
 DI_means <- DailyInput_SM %>% mutate(SITE.SM = paste(SITE, SM_type, sep = ".")) %>% group_by(SITE.SM) %>% 
-  summarise(W_SCALAR_mean=mean(W_SCALAR)) %>% select(SITE.SM, W_SCALAR_mean)
+  summarise(W_SCALAR_mean=mean(W_SCALAR), MAT_mean=mean(MAT)) %>% select(SITE.SM, W_SCALAR_mean, MAT_mean)
 #initial MICrK
 #BAGS_out_AllSites_ES$ID <- rep(1:18, each = 22995)
-#ID == 68 | ID==16 | ID== 64 | ID==70 | ID==52
-MIC_init <- BAGS_out_AllSites_Cal %>% filter(ID == 190) %>% filter(DAY == 315) %>%mutate(MICrK.i =  MICr/MICk)%>%
-  mutate(SITE.SM.LQ = paste(SITE, SM_Type, Litter_Type, sep = ".")) %>% select(SITE.SM.LQ, MICrK.i) #%>% filter(ID == 175)
+MIC_init <- BAGS_out_AllSites_ES_val %>% filter(ID == 1) %>% filter(DAY == 315) %>%mutate(MICrK.i =  MICr/MICk)%>%
+  mutate(SITE.SM.LQ = paste(SITE, SM_Type, Litter_Type, sep = ".")) %>% select(SITE.SM.LQ, MICrK.i) #%>% filter(ID == 4)
 #need bag means!
 BAGS_LIGN <- MSBio_BAGS %>% mutate(SITE.LQ = paste(SITE, TYPE, sep = ".")) %>% select(SITE.LQ, BAG_LIG_N)
-df_analysis <- df_LML %>% filter(ID == 190) %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>% 
+df_analysis <- df_LML %>% filter(ID == 1) %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>% 
   mutate(SITE.SM.LQ = paste(SITE, SM_Type, Litter_Type, sep = ".")) %>% mutate(SITE.SM = paste(SITE, SM_Type, sep = ".")) %>%
-  mutate(SITE.LQ = paste(SITE, Litter_Type, sep = ".")) %>% inner_join(DI_means, by="SITE.SM") %>% inner_join(MIC_init, by="SITE.SM.LQ") %>% 
-  inner_join(BAGS_LIGN, by="SITE.LQ") %>% mutate(LQ.SM=paste(Litter_Type, SM_Type, sep=".")) # %>% filter(ID == 175)
+  mutate(SITE.LQ = paste(SITE, Litter_Type, sep = ".")) %>% inner_join(DI_means, by="SITE.SM") %>% 
+  inner_join(MIC_init, by="SITE.SM.LQ") %>% inner_join(BAGS_LIGN, by="SITE.LQ") # %>% filter(ID == 3)
 #logical checks
 df_check <- df_analysis %>% filter(MICrK > 0.01) %>%
   filter(MICrK < 100) %>%
@@ -681,7 +355,7 @@ df_check$log_WS <- log(df_check$W_SCALAR_mean)
 # plot_rwa(MIM_rwa) 
 #effect size
 #df_ES <- df_check %>% mutate_at(vars(c("log_WS", "BAG_LIG_N", "MICrK.i")), ~(scale(.) %>% as.vector))
-Obs_ES_mod <- lmer(LIT_PerLoss ~ scale(log(W_SCALAR_mean))+scale(BAG_LIG_N)+scale(MICrK.i)+ (1|SITE/LQ.SM), data = df_check) #MAT #scale(BAG_LIG_N)+
+Obs_ES_mod <- lmer(LIT_PerLoss ~ scale(log(W_SCALAR_mean))+scale(BAG_LIG_N)+scale(MICrK.i)+ (1|SITE), data = df_check) #MAT #scale(BAG_LIG_N)+
 #Obs_ES_mod2 <- lmer(LIT_PerLoss ~ log_WS+BAG_LIG_N+MICrK.i+ (1|SITE), data = df_ES)
 summary(Obs_ES_mod)
 Obs_ES <- as.data.frame(fixef(Obs_ES_mod)) #fixed effects coefficients as effect size
@@ -693,34 +367,15 @@ Obs_ES$mult <- ifelse(Obs_ES$value <0, -1, 1)
 Obs_ES$rel_ES <- (abs(Obs_ES$value)/sum(abs(Obs_ES$value))) * 100 * Obs_ES$mult
 Obs_ES$Vars <- factor(Obs_ES$Vars, levels=c('scale(MICrK.i)','scale(BAG_LIG_N)', 'scale(log(W_SCALAR_mean))'),
                        labels=c('MICrK.i','BAG_LIG_N', 'log_WS'))
-ggplot(Obs_ES, aes(x=Vars, y=rel_ES)) + geom_bar(stat="identity", fill="darkolivegreen3") + coord_flip() + 
+ggplot(Obs_ES, aes(x=Vars, y=rel_ES)) + geom_bar(stat="identity", fill="lightblue") + coord_flip() + 
   geom_text(aes(label=round(rel_ES, digits=1), vjust=1.5), size=5) +theme_bw(base_size = 16)
-Obs_ES_SP<- Obs_ES 
-rbind(Obs_ES176, Obs_ES175, Obs_ES190) %>% group_by(Vars) %>% summarise(mean.rES = mean(rel_ES), sd.rES = sd(rel_ES)) %>%
-  ggplot(aes(x=Vars, y=mean.rES)) + geom_bar(stat="identity", fill="darkolivegreen3", aes(group=Vars)) +  geom_errorbar(aes(ymax=mean.rES+sd.rES, ymin=mean.rES-sd.rES), width=0.1, size=1) + 
+Obs_ES1<- Obs_ES
+rbind(Obs_ES1, Obs_ES2, Obs_ES3) %>% group_by(Vars) %>% summarise(mean.rES = mean(rel_ES), sd.rES = sd(rel_ES)) %>%
+  ggplot(aes(x=Vars, y=mean.rES)) + geom_bar(stat="identity", fill="lightblue", aes(group=Vars)) +  geom_errorbar(aes(ymax=mean.rES+sd.rES, ymin=mean.rES-sd.rES), width=0.1, size=1) + 
   coord_flip() + geom_text(aes(label=round(mean.rES, digits=1), vjust=1.5), size=5) +theme_bw(base_size = 16) #, hjust=1.1
-Obs_ES_Cal <- rbind(Obs_ES_176, Obs_ES_175, Obs_ES_190) %>% group_by(Vars) %>% summarise(mean.rES = mean(rel_ES), sd.rES = sd(rel_ES)) %>% mutate(ID="Cal")
-Obs_ES_SP2 <- Obs_ES_SP %>% mutate(mean.rES=rel_ES, sd.rES=0, ID="SP") %>% select(Vars, mean.rES, sd.rES, ID)
-#creating data frame for observed effect sizes
-Vars= c('log_WS','BAG_LIG_N', 'MICrK.i')
-mean.rES = c(42.8, -34.2, -22.9)
-sd.rES = c(0,0,0)
-ID= c("Obs", "Obs", "Obs")
-Obs_ES_Obs <- data.frame(Vars, mean.rES, sd.rES, ID)
-rbind(Obs_ES_Obs, Obs_ES_SP2, Obs_ES_Cal) %>% ggplot() + 
-  geom_bar(aes(x=factor(Vars, level=c('log_WS', 'BAG_LIG_N', 'MICrK.i'), labels = c("Soil moisture", "Litter quality", "Microbial community")),
-        y=mean.rES, fill = factor(ID, level=c('Obs', 'SP', 'Cal'), labels = c("Observations", "Default", "Calibrated"))), stat="identity", position = position_dodge(), color="black", linewidth=1) +
-  geom_errorbar(aes(x=factor(Vars, level=c('log_WS', 'BAG_LIG_N', 'MICrK.i'), labels = c("Soil moisture", "Litter quality", "Microbial community")),
-                    y=mean.rES, ymax=mean.rES+sd.rES, ymin=mean.rES-sd.rES, 
-                    group=factor(ID, level=c('Obs', 'SP', 'Cal'), labels = c("Observations", "Default", "Calibrated"))), width=0.1, size=1, position = position_dodge(0.9)) +
-  xlab("") + ylab("Relative effect size") + geom_abline(intercept=0, slope=0, color="black", linewidth=0.6) +
-  theme_bw(base_size = 16)  + scale_fill_manual(name="Type", values = c(Observations = "black", Default = "white", Calibrated="darkgrey")) 
-#collineraity?
-vif(Obs_ES_mod) # for SP: all less than 5, up to 3.6
-#for calibrated: (175) all less than 5, up to 3.6; (176) all less than 5, up to 4.7; (190) all less than 5, up to 4.0
 
 
-#random forest#random forestposition_dodge2()
+#random forest
 #test and training data - using 75 train-25 test split like in Georgiou et al., 2021
 # MFG_rf <- as.data.frame(df_check %>% select(LIT_PerLoss, MAT, W_SCALAR, LIG_N, MICrK) %>% na.omit(.))
 # split <- sample.split(MFG_rf, SplitRatio = 0.75)

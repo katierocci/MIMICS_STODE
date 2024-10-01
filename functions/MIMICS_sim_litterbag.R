@@ -41,6 +41,7 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
     
   LIT    <- array(NA, dim = c(2,nday))
   LITBAG <- array(NA, dim = c(2,nday))
+  DECOMP <- array(NA, dim = c(4,nday))
   MIC    <- array(NA, dim = c(2,nday))
   SOM    <- array(NA, dim = c(3,nday))
   LITbag_1 = 0. # initial litter bag 
@@ -76,6 +77,7 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
     }  
    
     # Run simulation at hourly timestep
+    #print(beta)
     for (h in 1:24)   {
       Ty <- c( LIT_1 = MIMfwd[1], LIT_2 = MIMfwd[2], 
                  MIC_1 = MIMfwd[3], MIC_2 = MIMfwd[4], 
@@ -123,6 +125,10 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
         SOM[1,d] <- MIMfwd[5]
         SOM[2,d] <- MIMfwd[6]
         SOM[3,d] <- MIMfwd[7]
+        DECOMP[1,d] <- LITbag[1]
+        DECOMP[2,d] <- LITbag[2]
+        DECOMP[3,d] <- LITbag[3]
+        DECOMP[4,d] <- LITbag[4]
           
         #advance day of year counter
         if (doy == 365) {
@@ -142,14 +148,20 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
   LITBAG_out <- rbind(as.data.frame(LITBAG), 
                       as.data.frame(LIT), 
                       as.data.frame(MIC),
-                      as.data.frame(SOM))
+                      as.data.frame(SOM),
+                      as.data.frame(DECOMP))
   
   LITBAG_out <- LITBAG_out * depth * 1e4 / 1e6  #mg/cm3 converted kg/m2
   LITBAG_out <- as.data.frame(t(LITBAG_out))
-  colnames(LITBAG_out) <- c("LITBAGm", "LITBAGs", "LITm", "LITs", "MICr", "MICk", "SOMp", "SOMc", "SOMa")
+  colnames(LITBAG_out) <- c("LITBAGm", "LITBAGs", "LITm", "LITs", "MICr", "MICk", "SOMp", "SOMc", "SOMa",
+                            "Decomp_rate_rm", "Decomp_rate_rs", "Decomp_rate_km", "Decomp_rate_ks")
   LITBAG_out <- cbind(data.frame(SITE = forcing_df$SITE,
                                  Litter_Type = as.character(litBAG[2]),
                                  SM_Type = as.character(forcing_df$SM_TYPE),
+                                 #Decomp_rate_rm = LITbag[1],
+                                 #Decomp_rate_rs = LITbag[2],
+                                 #Decomp_rate_km = LITbag[3],
+                                 #Decomp_rate_ks = LITbag[4],
                                  DAY=seq(1:nrow(LITBAG_out))), LITBAG_out)
   
   return(LITBAG_out)

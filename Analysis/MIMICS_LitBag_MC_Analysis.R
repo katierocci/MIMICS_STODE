@@ -9,31 +9,48 @@ library(rwa)
 library(ranger)
 library(caTools)
 library(vip)
+library(scatterplot3d)
+library(plotly)
+library(lattice)
+library(rgl)
 
 
 
 #bringing input data together with output data
 #df <- readRDS("C:/github/MIMICS_MSBio/Cheyenne_HPC/HPC_output/MSBio_MIM_MC_runs-1e+05_20221028_112647_.rds")
-MC_MIMICS <- readRDS('Analysis/MC_output/MSBio_MC_10_20240425_110136_.rds')
-# MC_MIMICS2 <- readRDS('Analysis/MC_output/MSBio_MC_4000_20240322_151155_.rds')
-# MC_MIMICS3 <- readRDS('Analysis/MC_output/MSBio_MC_4000_20240322_151947_.rds')
-# MC_MIMICS4 <- readRDS('Analysis/MC_output/MSBio_MC_4000_20240322_152653_.rds')
-# MC_MIMICS <- rbind(MC_MIMICS1, MC_MIMICS2, MC_MIMICS3, MC_MIMICS4)
+MC_MIMICS5 <- readRDS('Analysis/MC_output/MSBio_MC_10_20240807_142550_.rds')
+MC_MIMICS2 <- readRDS('Analysis/MC_output/MSBio_MC_500_20240425_182033_.rds')
+MC_MIMICS3 <- readRDS('Analysis/MC_output/MSBio_MC_500_20240425_184051_.rds')
+MC_MIMICS4 <- readRDS('Analysis/MC_output/MSBio_MC_500_20240425_184239_.rds')
+MC_MIMICS <- rbind(MC_MIMICS2, MC_MIMICS3, MC_MIMICS4) #%>% filter(DAY==315) #MC_MIMICS1,
+MC_MIMICS <- MC_MIMICS1
 #rand_params <- readRDS('Cheyenne_HPC/July 2023/MIMICS_MSBio_KR/MC_output/MSBio_RP_1e+05_20230728_132810_Tc.rds')
 #forogt to label SM_type in MC_MIMICS!
 #MC_MIMICS <- MC_MIMICS %>% mutate(SM_Type = rep(c("mean", "max", "min"), each=2299500))
-df <- left_join(MC_MIMICS, data, by = "SITE") #MC output has to be first for CO2 rows below to be right
+df <- left_join(MC_MIMICS5, data, by = "SITE") 
+df <- left_join(df,rand_params, by="run_num")
+#add unique run numbers when combining multiple derecho runs
+#df$run_num2 <- df$run_num
+#write.csv(df, 'df_For3DPlots.csv')
+#df <- read.csv('df_For3DPlots.csv')
+
 #df <- left_join(df, rand_params, by = "run_num") 
 #df$CO2_of_tot <- rowSums(df[,11:12])/rowSums(df[,4:12])
 df$MIM_CO <- as.numeric(df$MICr)/as.numeric(df$MICk)
 df$MIC_SOC <- (df$MICr+df$MICk)/(df$SOMc+df$SOMa+df$MICr+df$MICk)
 df$LITBAG_tot <- df$LITBAGm + df$LITBAGs
 
-#logical checks
-# df2 <- df %>% filter(MIM_CO > 0.01) %>%
+# #logical checks
+# df_LC <- df %>%
+#   filter(MIM_CO > 0.01) %>%
 #   filter(MIM_CO < 100) %>%
 #   filter(MIC_SOC > 0.0001) %>%
 #   filter(MIC_SOC < 0.40) 
+# 
+# LC.rn <- df_LC %>% group_by(run_num) %>% mutate(S.LQ.SM = paste(SITE, Litter_Type, SM_Type, sep=".")) %>% 
+# summarize(uniq.site = length(unique(S.LQ.SM))) %>% filter(uniq.site>62)
+# df_LC2 <- df_LC %>% filter(run_num %in% LC.rn$run_num)
+
 
 #looking at parameter effects
 # df_test <- df %>% filter(MIM_CO < 100)
@@ -61,8 +78,10 @@ LML_sum2 <- Field_LML  %>% group_by(site, time.point) %>% drop_na(percent.loss.l
             SE = sd.ML/sqrt(n.ML),
             lci.ML = mean.ML - qt(1 - ((1 - 0.95) / 2), n.ML - 1) * SE,
             uci.ML = mean.ML + qt(1 - ((1 - 0.95) / 2), n.ML - 1) * SE,
+            min.ML = min(percent.loss.litter*100),
+            max.ML = max(percent.loss.litter*100),
             doy = mean(days_elapsed)) %>% mutate(doy=round(doy, digits=0))
-FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% select(time.point,SITE.DAY, mean.ML, sd.ML, n.ML)
+FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% select(time.point,SITE.DAY, mean.ML, lci.ML, uci.ML, min.ML, max.ML)
 #LIT_init <- df2 %>% mutate(SITE.rn = paste(df$SITE, df$run_num, sep = "")) %>% filter(DAY == 10) %>% mutate(LITi = LITBAGm+LITBAGs) %>% select(SITE.rn, LITi)
 #LITi = 0.1
 #df_LML_all <- df %>% mutate(SITE.rn = paste(df$SITE, df$run_num, sep = ""))  %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100) %>% #%>% left_join(LIT_init, by = "SITE.rn")
@@ -118,6 +137,13 @@ LITi = 0.1
 df_LML <- df %>% mutate(SITE.rn = paste(df$SITE, df$run_num, sep = ""))  %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100) %>% 
   mutate(field.day=DAY-314) %>% mutate(SITE.DAY=paste(SITE, field.day, sep=".")) %>% right_join(FieldData, by="SITE.DAY")
 
+#why MICr:MICk going to zero??
+df %>% filter(DAY == 315) %>% ggplot(aes(y=MICr/MICk, x=CUE_x, color=SITE, shape=Litter_Type)) + geom_point() #+MICk #%>% filter(DAY == 315)   %>% filter(MICr/MICk < 100)
+df_plot <- df %>% filter(DAY==315) %>% filter(MIM_CO <100)
+df_plot$color <- as.factor(df_plot$SITE)
+levels(df_plot$color) <- c("orange2", "lightskyblue2", "palegreen4","yellow", "royalblue3", "sienna3", "hotpink1") 
+df_plot$color <- ifelse(df_plot$MIM_CO==0, "orange2", "royalblue3")
+plot3d(x = df_plot$CUE_x, y = df_plot$beta_x, z = df_plot$MIM_CO) #, col=df_plot$color
 
 #NPP v beta
 df_LML_1y <- df_LML %>% filter(DAY > 315) #%>% mutate(npp.beta = ANPP*beta_x) #%>% filter(MICk<1.1 & MICk>0.9)#%>%  filter(ANPP>1400 & ANPP<1700)
@@ -180,7 +206,7 @@ ggplot(data=ES_SA, aes(x=beta_k.x, y=ES.dif, color=Vars)) + geom_point(size=3) +
 
 #filter to just data needed for analysis (e.g., time point 1 and 2 from field data)
 LITi = 0.1
-df_LML <- df %>% mutate(SITE.rn = paste(df$SITE, df$run_num, sep = ""))  %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100) %>% 
+df_LML <- df %>% mutate(SITE.rn = paste(SITE, run_num, sep = ""))  %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100) %>% 
   mutate(field.day=DAY-314) %>% mutate(SITE.DAY=paste(SITE, field.day, sep=".")) %>% right_join(FieldData, by="SITE.DAY")
 
 #filter for reasonable data
@@ -201,7 +227,7 @@ df_LML <- df %>% mutate(SITE.rn = paste(df$SITE, df$run_num, sep = ""))  %>% mut
 #                                   TSOI, LIG_N, W_SCALAR)
 #if using two timepoints with daily input
 DI_means <- DailyInput_SM %>% mutate(SITE.SM = paste(SM_type, SITE,sep = ".")) %>% group_by(SITE.SM) %>% 
-  summarise(W_SCALAR_mean=mean(W_SCALAR), MAT_mean=mean(MAT)) %>% select(SITE.SM, W_SCALAR_mean, MAT_mean) # SM_type, 
+  summarise(W_SCALAR_mean=mean(W_SCALAR)) %>% select(SITE.SM, W_SCALAR_mean) # SM_type, 
 #initial MICrK
 MIC_init <- df %>% filter(DAY == 315) %>% mutate(MICrK.i =  MICr/MICk)%>%
   mutate(SITE.SM.LQ.rn = paste(SITE, SM_Type, Litter_Type, run_num, sep = ".")) %>% select(SITE.SM.LQ.rn, MICrK.i) #SM_Type, 
@@ -211,31 +237,85 @@ df_analysis <- df_LML %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>
   mutate(SITE.SM.LQ.rn = paste(SITE, SM_Type, Litter_Type, run_num, sep = ".")) %>% mutate(SITE.SM = paste(SM_Type, SITE, sep = ".")) %>% # SM_Type,  SM_Type, 
   mutate(SITE.LQ = paste(SITE, Litter_Type, sep = ".")) %>% inner_join(DI_means, by="SITE.SM") %>% 
   inner_join(MIC_init, by="SITE.SM.LQ.rn") %>% inner_join(BAGS_LIGN, by="SITE.LQ")
+
+
+#filter for LML - mean of all sites
+#collect run numbers that fit percent loss from observations at time points 1 and 2 - frequency might need to change to account for 9 reps of each site
+# df_check$SITE <- as.factor(df_check$SITE)
+# df_rn1 <- df_check %>% filter(time.point == 1) %>% filter(LIT_PerLoss > 17 & LIT_PerLoss < 50) #highest and lowest values of confidence interval for time point 1
+# LR.rn1 <- df_rn1 %>% group_by(run_num) %>% summarize(uniq.site = length(unique(SITE))) %>% filter(uniq.site>3) #%>% filter(site.levels>4) #as.data.frame(table(df_rn1$run_num)) %>% filter(Freq > 4)
+# df_rn2 <- df_check %>% filter(time.point == 2) %>% filter(LIT_PerLoss > 25 & LIT_PerLoss < 80) #highest and lowest values of confidence interval for time point 2
+# LR.rn2 <- df_rn2 %>% group_by(run_num) %>%  summarize(uniq.site = length(unique(SITE))) %>% filter(uniq.site>3)  #as.data.frame(table(df_rn2$run_num)) %>% filter(Freq > 4)
+# #keep only run numbers that are in both dfs
+# df_rn1.v <- as.vector(LR.rn1$run_num) #as.numeric(LR.rn1$Var1)
+# df_rn2.v <- as.vector(LR.rn2$run_num) #as.numeric(LR.rn2$Var1)
+# #rn_final <- which(df_rn2.v %in% df_rn1.v) #this stopped working...
+# rn_final <- intersect(df_rn1.v,df_rn2.v)
+# #filter check df to only have run numbers that fit litter mass loss
+# df_check2 <- df_check %>% filter(run_num %in% rn_final)
+# #transforming and scaling data for analysis
+# df_TS <- df_check2 %>% mutate(log_WS = log(W_SCALAR_mean)) %>%select(run_num, SITE, LIT_PerLoss, log_WS, BAG_LIG_N, MICrK.i) %>% 
+#   mutate_at(vars(c("log_WS", "BAG_LIG_N", "MICrK.i")), ~(scale(.) %>% as.vector))
+
 #logical checks
-df_check <- df_analysis %>% filter(MICrK > 0.01) %>%
+ df_check <- df_analysis %>% filter(MICrK > 0.01) %>%
   filter(MICrK < 100) %>%
   filter(MICrK.i > 0.01) %>%
   filter(MICrK.i < 100) %>%
   filter(MIC/SOC > 0.0001) %>%
-  filter(MIC/SOC < 0.40) 
+  filter(MIC/SOC < 0.40)
+# LC.rn <- df_check %>% group_by(run_num) %>% mutate(S.LQ.SM = paste(SITE, Litter_Type, SM_Type, sep=".")) #%>% 
+# summarize(uniq.site = length(unique(S.LQ.SM))) %>% filter(uniq.site>62)
 
-#filter for LML - litter too slow right now
+#filter for LML - !for each site! - keeping every site, litter type and soil moisture - none make it!
 #collect run numbers that fit percent loss from observations at time points 1 and 2 - frequency might need to change to account for 9 reps of each site
 df_check$SITE <- as.factor(df_check$SITE)
-df_rn1 <- df_check %>% filter(time.point == 1) %>% filter(LIT_PerLoss > 17 & LIT_PerLoss < 50) #highest and lowest values of confidence interval for time point 1
-LR.rn1 <- df_rn1 %>% group_by(run_num) %>% summarize(uniq.site = length(unique(SITE))) %>% filter(uniq.site>3) #%>% filter(site.levels>4) #as.data.frame(table(df_rn1$run_num)) %>% filter(Freq > 4)
-df_rn2 <- df_check %>% filter(time.point == 2) %>% filter(LIT_PerLoss > 25 & LIT_PerLoss < 80) #highest and lowest values of confidence interval for time point 2
-LR.rn2 <- df_rn2 %>% group_by(run_num) %>%  summarize(uniq.site = length(unique(SITE))) %>% filter(uniq.site>3)  #as.data.frame(table(df_rn2$run_num)) %>% filter(Freq > 4)
+df_rn1 <- df_analysis %>% filter(time.point == 1) %>% filter(LIT_PerLoss > min.ML & LIT_PerLoss < max.ML) #highest and lowest values of confidence interval for time point 1
+LR.rn1 <- df_rn1 %>% group_by(run_num) %>% mutate(S.LQ.SM = paste(SITE, Litter_Type, SM_Type, sep=".")) %>% 
+  summarize(uniq.site = length(unique(S.LQ.SM))) %>% filter(uniq.site>6) #%>% filter(uniq.site>62) #%>% filter(site.levels>4) #as.data.frame(table(df_rn1$run_num)) %>% filter(Freq > 4)
+df_rn2 <- df_check %>% filter(time.point == 2) %>% filter(LIT_PerLoss > min.ML & LIT_PerLoss < max.ML) #highest and lowest values of confidence interval for time point 2
+LR.rn2 <- df_rn2 %>% group_by(run_num) %>% mutate(S.LQ.SM = paste(SITE, Litter_Type, SM_Type, sep=".")) %>% 
+  summarize(uniq.site = length(unique(S.LQ.SM))) %>% filter(uniq.site>6) #%>% filter(uniq.site>62)  #as.data.frame(table(df_rn2$run_num)) %>% filter(Freq > 4)
+#less strict filtering
+# df_check$SITE <- as.factor(df_check$SITE)
+# df_rn1 <- df_check %>% filter(time.point == 1) %>% filter(LIT_PerLoss > min.ML & LIT_PerLoss < max.ML) #highest and lowest values of confidence interval for time point 1
+# LR.rn1 <- df_rn1 %>% group_by(run_num) %>%  summarize(uniq.site = length(unique(SITE))) %>% filter(uniq.site>6)  #%>% filter(site.levels>4) #as.data.frame(table(df_rn1$run_num)) %>% filter(Freq > 4)
+# df_rn2 <- df_check %>% filter(time.point == 2) %>% filter(LIT_PerLoss > min.ML & LIT_PerLoss < max.ML) #highest and lowest values of confidence interval for time point 2
+# LR.rn2 <- df_rn2 %>% group_by(run_num) %>%  summarize(uniq.site = length(unique(SITE))) %>% filter(uniq.site>6)  
 #keep only run numbers that are in both dfs
 df_rn1.v <- as.vector(LR.rn1$run_num) #as.numeric(LR.rn1$Var1)
 df_rn2.v <- as.vector(LR.rn2$run_num) #as.numeric(LR.rn2$Var1)
-#rn_final <- which(df_rn2.v %in% df_rn1.v) #this stopped working...
 rn_final <- intersect(df_rn1.v,df_rn2.v)
 #filter check df to only have run numbers that fit litter mass loss
 df_check2 <- df_check %>% filter(run_num %in% rn_final)
 #transforming and scaling data for analysis
 df_TS <- df_check2 %>% mutate(log_WS = log(W_SCALAR_mean)) %>%select(run_num, SITE, LIT_PerLoss, log_WS, BAG_LIG_N, MICrK.i) %>% 
   mutate_at(vars(c("log_WS", "BAG_LIG_N", "MICrK.i")), ~(scale(.) %>% as.vector))
+
+df_RP <- df_check2 %>% select(run_num, beta_x, Tau_r, vMOD_m, vMOD_s) %>% unique()
+
+#relationships between tau and vmod and decomp
+plot(df_check2$vMOD_x, df_check2$LIT_PerLoss)
+plot(df_check2$Tau_K, df_check2$LIT_PerLoss)
+
+#if creating df_TS on Derecho:
+df_TS.1 <- readRDS('Analysis/MC_output/MSBio_df_TS_2500.2_1.rds')
+df_TS.2 <- readRDS('Analysis/MC_output/MSBio_df_TS_2500.2_2.rds')
+df_TS <- rbind(df_TS.1, df_TS.2)
+df_TS$UniqueID <- paste(df_TS$run_num, df_TS$log_WS,df_TS$BAG_LIG_N, sep = ".")
+#using min and max decomp at each site
+df_TS_MinMax <- readRDS('Analysis/MC_output/MSBio_df_TS_CIs.rds') #I forgot to change the file name on Derecho!
+#actually more than df_TS!
+#using 95% CI at each site
+df_TS_CIs <- readRDS('Analysis/MC_output/MSBio_df_TS_CIs_2.rds')
+#about half of the other two
+df_RP.1 <- readRDS('Analysis/MC_output/MSBio_df_RP_2500.2_1.rds')
+df_RP.2 <- readRDS('Analysis/MC_output/MSBio_df_RP_2500.2_2.rds')
+df_RP <- rbind(df_RP.1, df_RP.2)
+#joining input data, random parameters, and site data
+df_all <- left_join(df_TS, df_RP, by="run_num") %>% left_join(data, by="SITE")
+ggplot(df_all, aes(x=vMOD_x, y=BAG_LIG_N)) + geom_point(size=2) +theme_bw(base_size = 16)
+
 
 #filter for run numbers where less than 5 sites remain - already done above if using daily input!
 # low.rep <- as.data.frame(table(df_check2$run_num))
@@ -246,86 +326,127 @@ df_TS <- df_check2 %>% mutate(log_WS = log(W_SCALAR_mean)) %>%select(run_num, SI
 # bad.num <- c(rn_final.pre[30], 62, 64) #some run numbers created singular matrices which couldn't be inverted
 # df_TS2 <- df_TS %>% filter(!run_num %in% bad.num)
 #OPTION 1: cost as RWA - note when observational values are reasonably close, it may pick the same set of lowest parameter sets so no difference will be seen
-rn_final <- unique(df_TS$run_num)
-MIM_rwa <- data.frame()
-#start.time.rwa <- Sys.time()
-for (i in seq_along(rn_final)) { 
-  df_rwa <- filter(df_TS, run_num==rn_final[i])
-  rwa_mod <- rwa(df_rwa, "LIT_PerLoss", c("log_WS", "BAG_LIG_N", "MICrK.i"), applysigns = TRUE, plot = FALSE)
-  rwa <- as.data.frame(rwa_mod$result)
-  rwa$run_num <- rn_final[i]
-  MIM_rwa <- rbind(MIM_rwa,rwa)
-}
+# rn_final <- unique(df_TS$run_num)
+# MIM_rwa <- data.frame()
+# #start.time.rwa <- Sys.time()
+# for (i in seq_along(rn_final)) { 
+#   df_rwa <- filter(df_TS, run_num==rn_final[i])
+#   rwa_mod <- rwa(df_rwa, "LIT_PerLoss", c("log_WS", "BAG_LIG_N", "MICrK.i"), applysigns = TRUE, plot = FALSE)
+#   rwa <- as.data.frame(rwa_mod$result)
+#   rwa$run_num <- rn_final[i]
+#   MIM_rwa <- rbind(MIM_rwa,rwa)
+# }
 #write.csv(MIM_rwa, "MIM_RWA_16000.csv")
 #end.time.rwa <- Sys.time()
 #time.rwa = end.time.rwa - start.time.rwa #round(end.time.rwa - start.time.rwa,2) #5 seconds
+#
+# zz <- MIM_rwa %>% left_join(rand_params, by="run_num") %>% select(Variables, Sign.Rescaled.RelWeight, Tau_K) %>% 
+#   pivot_wider(names_from = Variables,values_from = Sign.Rescaled.RelWeight)
+# plot(zz$Tau_K, zz$log_WS)
 #select weights that best match observation weights- create cost function for weights
 #create dataframe of obs RWA - here using RWAs generated with C:O from Averill et al
-Variables = c("log_WS", "BAG_LIG_N", "MICrK.i") #matching model names "MAT", 
-obs_rw = c(64.3, -22.2, -13.5) #4/19/24 obs
-obs_rwa <- data.frame(Variables, obs_rw)
-#note that for next line df_LML$cost.ML comes from higher up code
-#MIM_rwa2 <- df_LML %>% group_by(run_num) %>% summarise(mean_cost_ML = mean(cost.ML))%>% right_join(MIM_rwa, by="run_num") #%>% filter(time.point == 2)
-# #sequential cost on one varaible
-# RWA_rn <- MIM_rwa2 %>% inner_join(obs_rwa, by="Variables") %>% filter(Variables=='W_SCALAR' & Sign.Rescaled.RelWeight > -70) 
-#create tolerance table to employ cost function based on multiple variables
-#same order as variables, above
-var_upper = c(80, -5, 0) #make uppers 100 if don't want upper bound
-var_lower = c(30, -20, -40) #make lowers -100 if don't want lower bound
-tol_table <- data.frame(Variables, var_lower, var_upper)
-RWA_rn <- MIM_rwa %>% inner_join(obs_rwa, by="Variables") %>% inner_join(tol_table, by="Variables") %>% 
-  filter(Sign.Rescaled.RelWeight < var_upper & Sign.Rescaled.RelWeight > var_lower)
-RWA_rn2 <- as.data.frame(table(RWA_rn$run_num)) %>% filter(Freq > 2) #ensurnig all varaibles are present in "ideal" parameter set
-RWA_rn.v <- as.vector(RWA_rn2$Var1)
-RWA_cost <- MIM_rwa %>% inner_join(obs_rwa, by="Variables") %>% mutate(rw.dif = Sign.Rescaled.RelWeight - obs_rw) %>% filter(run_num %in% RWA_rn.v)
-#same time cost
-#RWA_cost <- MIM_rwa2 %>% inner_join(obs_rwa, by="Variables") %>% mutate(rw.dif = Sign.Rescaled.RelWeight - obs_rw) %>% 
-#  mutate(cost2 = (abs(rw.dif)+mean_cost_ML)/2) %>% mutate(rel.cost = (cost2/abs(obs_rw))*100)
-#low cost based on top models
-#RWA_low.cost <- RWA_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(cost2)) %>% slice_min(mean_dif, n=100)
-#low cost based on relative cost value
-#RWA_low.cost <- RWA_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(rel.cost)) %>% filter(mean_dif<75)
-#sequential cost fucntions
-test <- RWA_cost %>% left_join(rand_params, by="run_num")
-#same time cost
-#test <- RWA_low.cost %>% left_join(RWA_cost, by="run_num") %>% left_join(rand_params, by="run_num")
-test2 <- test %>% select(run_num, Tau_r, Tau_K, CUE_x, vMOD_x, beta_x) %>% pivot_longer(2:6, names_to = "Multiplier", values_to = "value")
-#ridge plots for parameter mulitpliers
-Params_rwa <- ggplot(test2, aes(x = value, y=Multiplier, group=Multiplier, fill=Multiplier))+
-  geom_density_ridges(scale = 2) +
-  scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
-  scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
-  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
-  theme_ridges() +
-  scale_fill_brewer(palette = "Oranges") +
-  labs(title="Parameter multipliers for 2 best runs out of 100 using RWA") +#,
-  #subtitle="n=200 lowest cost parameter sets") +
-  theme(legend.position = "none") #removes the legend
-Params_rwa
-RWA_sum <- test2 %>% group_by(Multiplier) %>% summarise(mean.mult = mean(value))
-write.csv(RWA_sum, "RWA.Param.Mult_23042024.csv")
-#ridge plots for cost
-Cost_rwa <- ggplot(test, aes(x = rel.cost, y=Variables, group=Variables, fill=Variables))+
-  geom_density_ridges(scale = 1, rel_min_height=0.01) +
-  scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
-  scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
-  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
-  theme_ridges() +
-  scale_fill_brewer(palette = "Oranges") +
-  labs(title="Percent relative cost by variable for lowest mean cost by run number") +#,
-  #subtitle="n=200 lowest cost parameter sets") +
-  theme(legend.position = "none") #removes the legend
-Cost_rwa
-RWA_cost %>% group_by(Variables) %>% summarise(RW.mean = mean(Sign.Rescaled.RelWeight)) %>% ggplot(aes(x=Variables, y=RW.mean)) + 
-  geom_bar(stat="identity", fill="blue") + coord_flip() + geom_text(aes(label=round(RW.mean, digits=1)), color="red", size=7) +theme_bw(base_size = 16)
+# Variables = c("log_WS", "BAG_LIG_N", "MICrK.i") #matching model names "MAT", 
+# obs_rw = c(64.3, -22.2, -13.5) #4/19/24 obs
+# obs_rwa <- data.frame(Variables, obs_rw)
+# #note that for next line df_LML$cost.ML comes from higher up code
+# #MIM_rwa2 <- df_LML %>% group_by(run_num) %>% summarise(mean_cost_ML = mean(cost.ML))%>% right_join(MIM_rwa, by="run_num") #%>% filter(time.point == 2)
+# # #sequential cost on one varaible
+# # RWA_rn <- MIM_rwa2 %>% inner_join(obs_rwa, by="Variables") %>% filter(Variables=='W_SCALAR' & Sign.Rescaled.RelWeight > -70) 
+# #create tolerance table to employ cost function based on multiple variables
+# #same order as variables, above
+# #1500 runs
+# var_upper = c(70, -10, -5) #make uppers 100 if don't want upper bound
+# var_lower = c(55, -35, -20) #make lowers -100 if don't want lower bound
+# #other runs
+# #var_upper = c(90, -0, 0) #make uppers 100 if don't want upper bound
+# #var_lower = c(50, -50, -50) #make lowers -100 if don't want lower bound
+# tol_table <- data.frame(Variables, var_lower, var_upper)
+# RWA_rn <- MIM_rwa %>% inner_join(obs_rwa, by="Variables") %>% inner_join(tol_table, by="Variables") %>% 
+#   filter(Sign.Rescaled.RelWeight < var_upper & Sign.Rescaled.RelWeight > var_lower)
+# RWA_rn2 <- as.data.frame(table(RWA_rn$run_num)) %>% filter(Freq > 2) #ensurnig all varaibles are present in "ideal" parameter set
+# RWA_rn.v <- as.vector(RWA_rn2$Var1)
+# RWA_cost <- MIM_rwa %>% inner_join(obs_rwa, by="Variables") %>% mutate(rw.dif = Sign.Rescaled.RelWeight - obs_rw) %>% filter(run_num %in% RWA_rn.v)
+# #same time cost
+# #RWA_cost <- MIM_rwa2 %>% inner_join(obs_rwa, by="Variables") %>% mutate(rw.dif = Sign.Rescaled.RelWeight - obs_rw) %>% 
+# #  mutate(cost2 = (abs(rw.dif)+mean_cost_ML)/2) %>% mutate(rel.cost = (cost2/abs(obs_rw))*100)
+# #low cost based on top models
+# #RWA_low.cost <- RWA_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(cost2)) %>% slice_min(mean_dif, n=100)
+# #low cost based on relative cost value
+# #RWA_low.cost <- RWA_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(rel.cost)) %>% filter(mean_dif<75)
+# #sequential cost fucntions
+# #test <- RWA_cost %>% left_join(rand_params, by="run_num")
+# test <- RWA_cost %>% left_join(df_RP, by="run_num")
+# RWA_Psets <- test %>% select(CUE_x, beta_x, Tau_r, Tau_K, vMOD_s, vMOD_m) %>% unique() %>% mutate(ID = 1:length(Tau_r)) # Tau_K, 
+# write.csv(RWA_Psets, "RWA_Psets_vMODms.csv")
+# # MultRWA <- test %>% select(Variables, Sign.Rescaled.RelWeight, Tau_r, Tau_K, CUE_x, vMOD_x, beta_x) %>% 
+# #   pivot_wider(names_from = Variables,values_from = Sign.Rescaled.RelWeight)
+# # #parameter correlations
+# # plot(MultRWA$vMOD_x, MultRWA$BAG_LIG_N) #mostly negative, as vMOD gets higher LIG_N gets more negative
+# # scatterplot3d(x = MultRWA$vMOD_x, z = MultRWA$BAG_LIG_N, y = MultRWA$Tau_r)
+# # #same time cost
+# #test <- RWA_low.cost %>% left_join(RWA_cost, by="run_num") %>% left_join(rand_params, by="run_num")
+# test2 <- test %>% select(run_num, CUE_x, Tau_r, vMOD_s, vMOD_m) %>% pivot_longer(2:5, names_to = "Multiplier", values_to = "value")#Tau_r, Tau_K, 
+# #ridge plots for parameter mulitpliers
+# Params_rwa <- ggplot(test2, aes(x = value, y=Multiplier, group=Multiplier, fill=Multiplier))+
+#   geom_density_ridges(scale = 2) +
+#   scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
+#   scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
+#   coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
+#   theme_ridges() +
+#   scale_fill_brewer(palette = "Oranges") +
+#   labs(title="Parameter multipliers for 5 best runs out of 1500 using RWA") +#,
+#   #subtitle="n=200 lowest cost parameter sets") +
+#   theme(legend.position = "none") #removes the legend
+# Params_rwa
+# #getting local maxima
+# # dens <- layer_data(Params_rwa, 1)
+# # #just get x where height is maximized for each group
+# # LocalMaxima <- dens %>% group_by(group) %>% summarise(ValWhereMax = x[which.max(height)]) %>% mutate(Multiplier = c('beta_x','CUE_x','Tau_K','Tau_r','vMOD_x'))
+# # Params_rwa + geom_vline(xintercept = LocalMaxima$ValWhereMax)
+# #getting all local maxes
+# dens <- layer_data(Params_rwa, 1)
+# dens2 <- filter(dens, group == 1) #1=beta_x; 4=Tau_r; 5=vMOD_x
+# dens2 <- dens2[order(dens2$x),]
+# # Run length encode the sign of difference
+# rle <- rle(diff(as.vector(dens2$height)) > 0)
+# # Calculate startpoints of runs
+# starts <- cumsum(rle$lengths) - rle$lengths + 1
+# # Take the points where the rle is FALSE (so difference goes from positive to negative)
+# maxima_id <- starts[!rle$values]
+# maxima <- dens2[maxima_id,]
+# Params_rwa + geom_vline(data = maxima,
+#                aes(xintercept = x))
+# 
+# RWA_sum <- test2 %>% group_by(Multiplier) %>% summarise(mean.mult = mean(value), sd.mult = sd(value)) #how to mode from distributions
+# write.csv(RWA_sum, "RWA.Param.Mult_02052024.csv")
+# #order to match observations
+# RWA_cost$Variables <- factor(RWA_cost$Variables, levels=c('BAG_LIG_N', 'MICrK.i','log_WS'),
+#                              labels=c('BAG_LIG_N', 'MICrK.i','log_WS'))
+# RWA_cost %>% group_by(Variables) %>% summarise(RW.mean = mean(Sign.Rescaled.RelWeight)) %>% ggplot(aes(x=Variables, y=RW.mean)) + 
+#   geom_bar(stat="identity", fill="blue") + coord_flip() + geom_text(aes(label=round(RW.mean, digits=1)), color="red", size=7) +theme_bw(base_size = 16)
+# #ridge plots for cost
+# Cost_rwa <- ggplot(test, aes(x = rel.cost, y=Variables, group=Variables, fill=Variables))+
+#   geom_density_ridges(scale = 1, rel_min_height=0.01) +
+#   scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
+#   scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
+#   coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
+#   theme_ridges() +
+#   scale_fill_brewer(palette = "Oranges") +
+#   labs(title="Percent relative cost by variable for lowest mean cost by run number") +#,
+#   #subtitle="n=200 lowest cost parameter sets") +
+#   theme(legend.position = "none") #removes the legend
+# Cost_rwa
 
 #OPTION 2: cost as difference in effect size
-rn_final <- unique(df_TS$run_num)
+#rn_TS <- df_TS.i %>% group_by(run_num) %>% summarize(uniq.site = length(unique(SITE))) %>% filter(uniq.site>6) %>% select(run_num)
+#df_TS <- df_TS.i %>% filter(run_num %in% rn_TS$run_num)
+rn_final <- unique(df_TS$run_num) 
 MIM_ES <- data.frame()
 #start.time.es <- Sys.time()
 for (i in seq_along(rn_final)) {
   df_ES <- filter(df_TS, run_num==rn_final[i])
-  Obs_ES_mod <- lmer(LIT_PerLoss ~ log_WS+BAG_LIG_N+MICrK.i+(1|SITE), data = df_ES)
+  df_ES2 <- df_ES %>% mutate_at(vars(c("log_WS", "BAG_LIG_N", "MICrK.i")), ~(scale(.) %>% as.vector))
+  Obs_ES_mod <- lmer(LIT_PerLoss ~ log_WS+BAG_LIG_N+MICrK.i+(1|SITE/UniqueID), data = df_ES2)
   Obs_ES <- as.data.frame(fixef(Obs_ES_mod)) #fixed effects coefficients as effect size
   #Obs_ES_mod <- lm(LIT_PerLoss ~ log_WSR+BAG_LIG_N+MICrK.i, data = df_ES) #MAT+
   #Obs_ES <- as.data.frame(Obs_ES_mod$coefficients) #fixed effects coefficients as effect size
@@ -342,7 +463,7 @@ for (i in seq_along(rn_final)) {
 #time.es = round(end.time.es - start.time.es,2) #4 seconds
 #select effect sizes that best match observation weights- create cost function for weights
 #create dataframe of obs RWA - here using RWAs generated with C:O from Averill et al
-Vars = c("log_WS", "BAG_LIG_N", "MICrK.i") #matching mdoel names "MAT", 
+Vars = c("log_WS", "BAG_LIG_N", "MICrK.i") #matching model names "MAT", 
 #obs_ES = c(28.1, 1.6, -41.5, -28.8) #with VWC
 obs_ES = c(42.8, -34.2, -22.9) #4/19/24 obs
 obs_ES_df <- data.frame(Vars, obs_ES)
@@ -352,8 +473,18 @@ obs_ES_df <- data.frame(Vars, obs_ES)
 #ES_rn <- MIM_ES2 %>% inner_join(obs_ES_df, by="Vars") %>% filter(Vars=='MAT' & rel_ES > 0)
 #create tolerance table to employ cost function based on multiple variables
 #same order as variables, above
-var_upper = c(65, -10, 5) #make uppers 100 if don't want upper bound
-var_lower = c(10, -40, -50) #make lowers -100 if don't want lower bound
+#1500 runs
+#var_upper = c(50, -20, -15) #make uppers 100 if don't want upper bound
+#var_lower = c(30, -40, -26) #make lowers -100 if don't want lower bound
+#loose 5000 runs
+#var_upper = c(65, -15, -10) #make uppers 100 if don't want upper bound
+#var_lower = c(30, -45, -30) #make lowers -100 if don't want lower bound
+#+/- 10 5000 runs
+var_upper = c(52.8, -24.2, -12.9) #make uppers 100 if don't want upper bound
+var_lower = c(32.8, -44.2, -32.9) #make lowers -100 if don't want lower bound
+#same order as variables, above
+#var_upper = c(70, 0, 0) #make uppers 100 if don't want upper bound
+#var_lower = c(10, -60, -40) #make lowers -100 if don't want lower bound
 tol_table <- data.frame(Vars, var_lower, var_upper)
 ES_rn <- MIM_ES %>% inner_join(obs_ES_df, by="Vars") %>% inner_join(tol_table, by="Vars") %>% 
   filter(rel_ES < var_upper & rel_ES > var_lower)
@@ -368,10 +499,17 @@ ES_cost <- MIM_ES %>% inner_join(obs_ES_df, by="Vars") %>% mutate(es.dif = rel_E
 #low cost based on relative cost value - doesn't work well because W_SCALAR is so low
 #ES_low.cost <- ES_cost %>% group_by(run_num) %>% summarise(mean_dif = mean(rel.cost)) %>% filter(mean_dif<200)
 #sequential cost
-test <- ES_cost %>% left_join(rand_params, by="run_num")
+#test <- ES_cost %>% left_join(rand_params, by="run_num")
+rn_filter = c(1:4500)
+ES_cost2 <- ES_cost %>% filter(run_num %in% rn_filter)
+test <- ES_cost2 %>% left_join(df_RP, by="run_num")
+#getting each random parameter set
+#ES_Psets <- test %>% select(run_num, CUE_x, Tau_r, Tau_K, vMOD_x, beta_x) %>% unique() %>% mutate(ID = 1:length(Tau_r)) #Tau_K, 
+#ES_Psets_NoCUE <- test %>% select(beta_x, Tau_r, vMOD_m, vMOD_s, run_num) %>% unique() %>% mutate(ID = 1:length(vMOD_m)) #Tau_K,
+#write.csv(ES_Psets_NoCUE, "ES_Psets_5000_NewInputs_ES.csv")
 #combined cost
 #test <- ES_low.cost %>% left_join(ES_cost, by="run_num") %>% left_join(rand_params, by="run_num")
-test2 <- test %>% select(run_num, Tau_r, Tau_K, CUE_x, vMOD_x, beta_x) %>% pivot_longer(2:6, names_to = "Multiplier", values_to = "value")
+test2 <- test %>% select(run_num, Tau_r, vMOD_m, vMOD_s, beta_x) %>% pivot_longer(2:5, names_to = "Multiplier", values_to = "value") #Tau_K, Tau_r, CUE_x, vMOD_x, beta_x
 Params_ES <- ggplot(test2, aes(x = value, y=Multiplier, group=Multiplier, fill=Multiplier))+
   geom_density_ridges(scale = 2) +
   scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
@@ -379,25 +517,46 @@ Params_ES <- ggplot(test2, aes(x = value, y=Multiplier, group=Multiplier, fill=M
   coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
   theme_ridges() +
   scale_fill_brewer(palette = "Oranges") +
-  labs(title="Parameter multipliers for 8 best runs using effect size") +#,
+  labs(title="Parameter multipliers") + # for 227 best runs out of 5000 using effect size") +#,
   #subtitle="n=200 lowest cost parameter sets") +
   theme(legend.position = "none") #removes the legend
 Params_ES
-ES_sum <- test2 %>% group_by(Multiplier) %>% summarise(mean.mult = mean(value))
-write.csv(ES_sum, "ES.Param.Mult_23042024.csv")
+ES_sum <- test2 %>% group_by(Multiplier) %>% summarise(mean.mult = mean(value), sd.mult = sd(value))
+write.csv(ES_sum, "ES.Param.Mult_02052024.csv")
+#getting local maxima
+dens <- layer_data(Params_ES, 1)
+#just get x where height is maximized for each group
+LocalMaxima <- dens %>% group_by(group) %>% summarise(ValWhereMax = x[which.max(height)]) %>% mutate(Multiplier = c('beta_x','CUE_x','Tau_K','Tau_r','vMOD_x'))
+Params_rwa + geom_vline(xintercept = LocalMaxima$ValWhereMax)
+#getting all local maxes
+dens <- layer_data(Params_ES, 1)
+dens2 <- filter(dens, group == 1) #1=beta_x; 2=CUE_x; 3=Tau_K 4=Tau_r; 5=vMOD_x
+dens2 <- dens2[order(dens2$x),]
+# Run length encode the sign of difference
+rle <- rle(diff(as.vector(dens2$height)) > 0)
+# Calculate startpoints of runs
+starts <- cumsum(rle$lengths) - rle$lengths + 1
+# Take the points where the rle is FALSE (so difference goes from positive to negative)
+maxima_id <- starts[!rle$values]
+maxima <- dens2[maxima_id,]
+Params_ES + geom_vline(data = maxima,
+               aes(xintercept = x))
 #ridge plots for cost
-Cost_rwa <- ggplot(test, aes(x = cost2, y=Vars, group=Vars, fill=Vars))+
-  geom_density_ridges(scale = 1, rel_min_height=0.01) +
-  scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
-  scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
-  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
-  theme_ridges() +
-  scale_fill_brewer(palette = "Oranges") +
-  labs(title="Cost of lowest 50 cost p-sets by variable") +#,
-  #subtitle="n=200 lowest cost parameter sets") +
-  theme(legend.position = "none") #removes the legend
-Cost_rwa
-ES_cost %>% group_by(Vars) %>% summarise(ES.mean = mean(rel_ES)) %>% ggplot(aes(x=Vars, y=ES.mean)) + 
+# Cost_es <- ggplot(test, aes(x = cost2, y=Vars, group=Vars, fill=Vars))+
+#   geom_density_ridges(scale = 1, rel_min_height=0.01) +
+#   scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
+#   scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
+#   coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
+#   theme_ridges() +
+#   scale_fill_brewer(palette = "Oranges") +
+#   labs(title="Cost of lowest 50 cost p-sets by variable") +#,
+#   #subtitle="n=200 lowest cost parameter sets") +
+#   theme(legend.position = "none") #removes the legend
+# Cost_es
+#order to match observations
+ES_cost2$Vars <- factor(ES_cost2$Vars, levels=c('MICrK.i','BAG_LIG_N', 'log_WS'),
+                             labels=c('MICrK.i','BAG_LIG_N', 'log_WS'))
+ES_cost2 %>% group_by(Vars) %>% summarise(ES.mean = mean(rel_ES)) %>% ggplot(aes(x=Vars, y=ES.mean)) + 
   geom_bar(stat="identity", fill="blue") + coord_flip() + geom_text(aes(label=round(ES.mean, digits=1)), color="red", size=7) +theme_bw(base_size = 16)
 
 

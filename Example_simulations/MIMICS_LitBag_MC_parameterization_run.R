@@ -22,27 +22,29 @@ source("functions/MC_parameterization/set_parameter_defaults.R")
 ########################################
 # Load forcing data
 ########################################
+
 #load site data
 MSBio <- read.csv("Example_simulations/Data/Site_annual_clim_final.csv")
-#match input data strucutre
-#AGNPP should be in gram dry weight! multiply by 2 here to remedy
-#if using soil moisture and not water scalar: we are using VWC and not GWC - assuming a BD of 1g/cm3 makes them equivalent but this assumption may be flawed
-data1 <- MSBio %>% mutate(SITE = Site, ANPP = AGNPP_sum*2, TSOI = TSOI_mean, CLAY = PCT_CLAY_mean, lig_N = LIG_N, GWC = H2OSOI_mean*100, W_SCALAR=W_SCALAR_mean) %>%
-  select(SITE, ANPP, TSOI, CLAY, LIG_N, LIG_N_sp1, LIG_N_sp2, LIG_N_sp3, GWC, W_SCALAR, lci_SM_ratio, uci_SM_ratio)
-#replacing anomalously high ANPP values for OSBS and TALL based on NEON measurements
-MSBio2 <- data1
-NEON_GPP <- read.csv("Example_simulations/Data/NEON_GPP.csv")
-MSBio2$ANPP[MSBio2$SITE == "OSBS"] <- 547 + 0.18*NEON_GPP[6,2] #using relationship between NEON GPP and ANPP
-MSBio2$ANPP[MSBio2$SITE == "TALL"] <- 547 + 0.18*NEON_GPP[9,2] #using relationship between NEON GPP and ANPP 
-#filtering for sites with microbial data
-Mic_sites <- c("SERC","BART","TALL","TREE","LENO","HARV","GRSM")
-data_sites <- filter(MSBio2, SITE %in% Mic_sites)
-data <- data_sites
-
+#match input data structure
+#AGNPP should be in grams Dry Weight (gDW) not gC! multiply by 2 here to remedy
+#switching AGNPP to LITFALL to match daily inputs!
+#don't have gravimetric soil moisture, just volumetric, assuming a BD of 1g/cm3 makes them equivalent - could be bad assumption given this is BD of leaves
+MSBio2 <- MSBio %>% mutate(SITE = Site, ANPP = LITFALL_sum*2, TSOI = TSOI_mean, CLAY = PCT_CLAY_mean, GWC = H2OSOI_mean*100, W_SCALAR=W_SCALAR_mean) %>%
+  select(SITE, ANPP, TSOI, CLAY, LIG_N, LIG_N_sp1, LIG_N_sp2, LIG_N_sp3, GWC, W_SCALAR, lci_SM_ratio, uci_SM_ratio) 
+#fixing TALL and OSBS ANPP
+#NEON_GPP <- read.csv("Example_simulations/Data/NEON_GPP.csv")
+#MSBio3$ANPP[MSBio3$SITE == "TALL"] <- 510 + 0.41*NEON_GPP[9,2] #using relationship between NEON GPP and ANPP 
 #loading daily inputs and replacing TALL data to be more realistic
-DailyInput <- read.csv("Example_simulations/Data/DailyInput.csv")
-DailyInput$LITFALL[DailyInput$SITE == "TALL"] <- DailyInput$LITFALL[DailyInput$SITE == "TALL"]*0.663
+DailyInput <- read.csv("Example_simulations/Data/DailyInput.csv") %>% select(-MAT)
+DailyInput$LITFALL[DailyInput$SITE == "TALL"] <- DailyInput$LITFALL[DailyInput$SITE == "TALL"]*0.60
 DailyInput$ANPP[DailyInput$SITE == "TALL"] <- sum(DailyInput$LITFALL[DailyInput$SITE == "TALL"])
+#replacing MSBio data with daily input sums and means to ensure comparable data between daily data and annual data
+DI_sum <- DailyInput %>% select(SITE, ANPP, TSOI, W_SCALAR) %>% group_by(SITE, ANPP) %>% summarise(TSOI=mean(TSOI), W_SCALAR=mean(W_SCALAR))
+MSBio3 <- MSBio2 %>% select(-ANPP, -TSOI, -W_SCALAR) %>% inner_join(DI_sum, by="SITE")
+#filtering for only sites with microbial data to match observations
+Mic_sites <- c("SERC","BART","TALL","TREE","LENO","HARV","GRSM")
+data <- filter(MSBio3, SITE %in% Mic_sites)
+
 
 #formatting data for multiple soil moisture types
 data_SM <- rbind(data, data, data)
@@ -82,25 +84,34 @@ BAGS_mean <- filter(BAGS, TYPE == "LIG_N_sp1")
 ####################################
 
 # Set desired number of random parameter runs
-MIM_runs <- 100
+MIM_runs <- 50
 
 ### Create random parameter dataframe
 ## Parameter range informed by range observed over 10+ MCMC analysis results
 rand_params <- data.frame(#Tau_x = runif(MIM_runs, 0.3, 2), #original range: 0.3,3
-   Tau_r = runif(MIM_runs, 0.3, 2), #original range: 0.3,3
-   Tau_K = runif(MIM_runs, 0.3, 3),
-   CUE_x = runif(MIM_runs, 0.5, 1.1), #original range: 0.5,1.4
+  #Tau_r = seq(0.3, 2,((2-0.3)/(MIM_runs-1))), 
+  Tau_r = runif(MIM_runs, 0.3, 2), #original range: 0.3,3; secondary range: 0.3, 2
+  #Tau_K = seq(0.3, 3,((3-0.3)/(MIM_runs-1)))
+   #Tau_K = runif(MIM_runs, 0.3, 3), #range: 0.3,3
+  # CUE_x = runif(MIM_runs, 0.5, 1.1), #original range: 0.5,1.4
+  #CUE_x = seq(0.5, 1.1,((1.1-0.5)/(MIM_runs-1)))
   # CUE_r = runif(MIM_runs, 0.5, 1.4)#,
   # CUE_k = runif(MIM_runs, 0.5, 1.4)
   #Vslope_x = runif(MIM_runs, 0.5, 2)#,
   #Vint_x = runif(MIM_runs, 0.8, 1.3)
   #Kslope_x = runif(MIM_runs, 0.5, 2),
   #Kint_x = runif(MIM_runs, 0.5, 2)#,
-  vMOD_x = runif(MIM_runs, 0.5, 2),
+  #vMOD_x = runif(MIM_runs, 0.5, 2),
+  vMOD_m = runif(MIM_runs, 0.5, 2), #original range: 0.5,2
+  vMOD_s = runif(MIM_runs, 0.5, 2), #original range: 0.5,2
+  #vMOD_x = seq(0.5,2,((2-0.5)/(MIM_runs-1)))
   #kMOD_x = runif(MIM_runs, 0.5, 2),
-  #fM_x = runif(MIM_runs, 0.8, 1.3) #for overall multiplier
-  #fM_x = runif(MIM_runs, 0.1, 1.05) #for slope multiplier - by my calculations pretty close to max as is
-  beta_x = runif(MIM_runs, 0.67,1.33) #varies from 1 to 5 since default is 1.5
+  #aV_x = runif(MIM_runs, 0.5, 2)#,
+  #aV_x = seq(0.5, 2,((2-0.5)/(MIM_runs-1)))
+  #fM_x = runif(MIM_runs, 1, 1.3), #for overall multiplier
+  #fM_x = runif(MIM_runs, 0.1, 1.05), #for slope multiplier - by my calculations pretty close to max as is - something about turning this on is likely what kills the parameterization
+  beta_x = runif(MIM_runs, 0.67 ,1.33) #varies from 0.67 to 1.33 since default is 1.5 and can only vary between 1 and 2
+  #beta_x = seq(0.67, 1.33,((1.33-0.67)/(MIM_runs-1)))
   #beta_r = runif(MIM_runs, 0.67,1.33), #varies from 1 to 5 since default is 1.5
   #beta_k = runif(MIM_runs, 0.67,1.33) #varies from 1 to 5 since default is 1.5
 )
@@ -133,9 +144,10 @@ start_time <- Sys.time()
 #   bind_rows()
 
 #DAILY INPUT WITH MULTIPLE LQ AND SOIL MOISTURE
-MC_MIMICS <- rand_params %>% split(1:nrow(rand_params)) %>% future_map(~MIMrepeat(forcing_df = data_SM, litBAG = BAGS, dailyInput = DailyInput_SM, rparams = .), .progress=TRUE) %>%
+MC_MIMICS_NovMOD <- rand_params %>% split(1:nrow(rand_params)) %>% future_map(~MIMrepeat(forcing_df = data_SM, litBAG = BAGS, dailyInput = DailyInput_SM, rparams = .), .progress=TRUE) %>%
   bind_rows()
 #took ~ 15 minutes for 10 runs
+#new computer is so fast! Took 2 minutes for 5 runs!
 
 wall_time <- Sys.time() - start_time
 print(paste0("Wall time: ", as.character(wall_time)))
