@@ -61,7 +61,7 @@ MSBio_sites <- filter(MSBio3, SITE %in% Mic_sites)
 # TREE_dailyinput <- read.csv("Example_simulations/Data/TREE_clim.csv")
 #TREE_DI <- TREE_dailyinput %>% mutate(DAY=X, ANPP = rep(sum(LITFALL)*2,366), LITFALL=LITFALL*2, CLAY = rep(MSBio2[7,4], 366),
 #                                       LIG_N = rep(MSBio2[7,5], 366), GWC = H2OSOI*100) %>% # , MAT=TBOT
-#   select(DAY, ANPP, LITFALL, TSOI, CLAY, LIG_N, GWC, W_SCALAR) # MAT, 
+#   select(DAY, ANPP, LITFALL, TSOI, CLAY, LIG_N, GWC, W_SCALAR) # MAT,
 # DailyInput <- rbind(BART_DI, GRSM_DI, HARV_DI, LENO_DI, SERC_DI, TALL_DI, TREE_DI)
 # DailyInput$SITE <- c(rep("BART", 366), rep("GRSM", 366), rep("HARV", 366), rep("LENO", 365), rep("SERC", 366), rep("TALL", 366), rep("TREE", 366))
 # write.csv(DailyInput, "Example_simulations/Data/DailyInput.csv")
@@ -77,7 +77,14 @@ MSBio_sites <- filter(MSBio3, SITE %in% Mic_sites)
 #(2)
 # DI_40 <- DailyInput %>% filter(DAY==40)
 # NPPComp <-DI_40%>% inner_join(NEON_GPP, by = "SITE")
-# ggplot(NPPComp, aes(x=Annual.GPP, y= ANPP, color=SITE)) + geom_point(size=4) + theme_bw(base_size = 16) #TALL is too high and LENO is too low in comparison to NEON GPP
+# colorBlind7  <- c("#E69F00", "#56B4E9", "#009E73",
+#                   "#F0E442", "#0072B2", "#D55E00", "#CC79A7") 
+# NPPComp <- NPPComp %>% mutate(SITE=factor(SITE, levels=c("TREE", "BART", "HARV", "GRSM", "SERC", "TALL", "LENO"))) #MAT order
+# ggplot() + geom_point(data=NPPComp, aes(x=Annual.GPP, y= ANPP, color=SITE),size=4) +
+#   geom_smooth(data=NPP_GoodSites, aes(x=Annual.GPP, y=ANPP), method='lm', color="black", se=FALSE)+ 
+#   theme_bw(base_size = 16) + scale_color_manual(values=colorBlind7) + 
+#   xlab(expression(paste("NEON GPP (gC m"^"-2"*" yr"^"-1"*")"))) +
+#   ylab(expression(paste("CLM annual litterfall (gC m"^"-2"*" yr"^"-1"*")")))#TALL is too high and LENO is too low in comparison to NEON GPP
 # NPP_GoodSites <- NPPComp %>% filter(SITE != "TALL")
 # NPP_mod <- lm(ANPP~Annual.GPP, data=NPP_GoodSites)
 # summary(NPP_mod) #510 + 0.18x #with derecho: 530 + 0.50x
@@ -350,6 +357,14 @@ LML_sum2 <- Field_LML  %>% group_by(site, time.point) %>% drop_na(percent.loss.l
   doy = mean(days_elapsed)) %>% mutate(doy=round(doy, digits=0)) %>%
 filter(site %in% Mic_sites)
 
+#quick little MAOM-moisture test
+#SM_comp <- MSBio_sites_SM %>% mutate(SITE.SM = paste(SITE, SM_type)) %>% select(SITE.SM, W_SCALAR)
+#BAGS_out_AllSites_SP %>% mutate(SITE.SM = paste(SITE, SM_Type)) %>% inner_join(SM_comp, by="SITE.SM") %>% filter(DAY==315) %>% ggplot(aes(x=W_SCALAR, y=SOMp)) + geom_point(aes(color=SITE), size=4) +theme_bw() +geom_smooth()
+#BAGS_out_AllSites_Cal %>% mutate(SITE.SM = paste(SITE, SM_Type)) %>% inner_join(SM_comp, by="SITE.SM") %>% filter(DAY==315) %>% ggplot(aes(x=W_SCALAR, y=SOMp)) + geom_point(aes(color=SITE), size=4) +theme_bw() +geom_smooth()
+#SP_SM.SOMp <- BAGS_out_AllSites_SP %>% mutate(SITE.SM = paste(SITE, SM_Type)) %>% inner_join(SM_comp, by="SITE.SM") %>% filter(DAY==315) 
+#Cal_SM.SOMp <- BAGS_out_AllSites_Cal %>% mutate(SITE.SM = paste(SITE, SM_Type)) %>% inner_join(SM_comp, by="SITE.SM") %>% filter(DAY==315) 
+#cor.test(SP_SM.SOMp$W_SCALAR, SP_SM.SOMp$SOMp)
+#cor.test(Cal_SM.SOMp$W_SCALAR, Cal_SM.SOMp$SOMp) #only slightly higher R
 
 #comparison of baseline MIMICS to LML
 #got rid of LITi calcs since all litters back to the same starting value
@@ -391,8 +406,9 @@ BO_plot_sum <- BAGS_out_plot %>% group_by(SITE,DAY) %>% summarise(mean=mean(LIT_
 # filter(ID==215 | ID== 71 | ID==227 | ID==38 | ID==164 | ID==21) %>%
 BO_plot_sum <- BO_plot_sum %>% mutate(SITE=factor(SITE, levels=c("TREE", "BART", "HARV", "GRSM", "SERC", "TALL", "LENO"))) #MAT order
 LML_sum2 <- LML_sum2 %>% mutate(site=factor(site, levels=c("TREE", "BART", "HARV", "GRSM", "SERC", "TALL", "LENO"))) #MAT order
+tiff("MSBio_Fig2_SP.tiff", units="px", width=2000, height=1500, res=300)
 ggplot() +
-  geom_ribbon(data=BO_plot_sum, aes(y=100-mean, x=DAY-315, ymin = 100-min, ymax=100-max, group=SITE, fill=SITE), alpha = 0.3) +
+  geom_ribbon(data=BO_plot_sum, aes(y=100-mean, x=DAY-315, ymin = 100-min, ymax=100-max, group=SITE, fill=SITE, color=SITE), alpha = 0.3, size=0.5) +
   #geom_line(data=BO_plot_sum, aes(y=100-mean, x=DAY-315, group=SITE, color=SITE), linewidth=2, alpha = 0.3) +
   geom_point(data=LML_sum2, aes(y=100-mean.ML, x=doy, group=site, color=site), size = 3) +
   geom_errorbar(data=LML_sum2, aes(y=100-mean.ML, x=doy, ymin = 100-lci.ML, ymax = 100-uci.ML, group=site, color=site), width=0,linewidth=1) +
@@ -403,18 +419,19 @@ ggplot() +
   scale_fill_manual(values = colorBlind7) +
   theme_bw(base_size = 20) #+
   #facet_wrap(.~SM_Type)
+dev.off()
 #seperate plotting of LITm and LITs
-LIT_init <- BO_NC_best %>% filter(DAY == 315) %>% mutate(LITm.i = LITBAGm) %>% mutate(LITs.i = LITBAGs) %>% 
-  mutate(SITE.LT.SM = paste(SITE, Litter_Type, SM_Type,ID, sep=".")) %>% select(SITE.LT.SM, LITm.i, LITs.i)
-BAGS_out_plot <- BO_NC_best %>% mutate(SITE.LT.SM = paste(SITE, Litter_Type, SM_Type,ID, sep=".")) %>% inner_join(LIT_init, by="SITE.LT.SM") %>%
-  mutate(LITm_PerLoss = ((LITm.i - (LITBAGm))/LITm.i)*100) %>% mutate(LITs_PerLoss = ((LITs.i - (LITBAGs))/LITs.i)*100) %>%
-  filter(ID==68)
+LIT_init <- BAGS_out_AllSites_SP %>% filter(DAY == 315) %>% mutate(LITm.i = LITBAGm) %>% mutate(LITs.i = LITBAGs) %>% 
+  mutate(SITE.LT.SM = paste(SITE, Litter_Type, SM_Type, sep=".")) %>% select(SITE.LT.SM, LITm.i, LITs.i)
+BAGS_out_plot <- BAGS_out_AllSites_Cal %>% mutate(SITE.LT.SM = paste(SITE, Litter_Type, SM_Type, sep=".")) %>% inner_join(LIT_init, by="SITE.LT.SM") %>%
+  mutate(LITm_PerLoss = ((LITm.i - (LITBAGm))/LITm.i)*100) %>% mutate(LITs_PerLoss = ((LITs.i - (LITBAGs))/LITs.i)*100) #%>% filter(ID==190)
 #plotting
 BO_plot_sum.ms <- BAGS_out_plot %>% group_by(SITE,DAY) %>% summarise(mean.m=mean(LITm_PerLoss), min.m=min(LITm_PerLoss), max.m=max(LITm_PerLoss), 
                                                                              mean.s=mean(LITs_PerLoss), min.s=min(LITs_PerLoss), max.s=max(LITs_PerLoss)) %>%
   pivot_longer(3:8, names_to = 'LIT.ms', values_to = 'value') %>% ungroup() %>% mutate(LIT_type = ifelse(grepl("s", LIT.ms), "S", "M")) %>% 
   mutate(stat_type = rep(c("mean", "min", "max"), 15330)) %>% select(SITE, DAY, LIT_type, stat_type, value) %>% pivot_wider(names_from = stat_type, values_from = value)
 #pivot wider based on new column that makes a structural column if LIT.ms contains "s"
+BO_plot_sum.ms <- BO_plot_sum.ms %>% mutate(SITE=factor(SITE, levels=c("TREE", "BART", "HARV", "GRSM", "SERC", "TALL", "LENO"))) #MAT order
 ggplot() +
   geom_ribbon(data=BO_plot_sum.ms, aes(y=100-mean, x=DAY-315, ymin = 100-min, ymax=100-max, group=SITE, fill=SITE), alpha = 0.3) +
   #geom_line(data=BO_plot_sum, aes(y=100-mean, x=DAY-315, group=SITE, color=SITE), linewidth=2, alpha = 0.3) +
@@ -424,7 +441,7 @@ ggplot() +
   xlab("Day") +
   xlim(0, 780) +
   facet_wrap(.~LIT_type) +
-  theme_bw(base_size = 20)
+  theme_bw(base_size = 20) + scale_fill_manual(values=colorBlind7)+ scale_color_manual(values=colorBlind7)
 
 
 #looking at model output to see how calibrated differs from starting point model
@@ -444,25 +461,34 @@ high_pools <- c("LITs", "SOMa", "SOMc", "SOMp") #"MICrK",
 BO_initial %>% filter(Pools %in% high_pools) %>% ggplot(aes(x=Carbon_SP, y=Carbon_CE)) + geom_point(aes(color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + facet_grid(.~Pools) + 
   geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16)
 MICrK_pool <- c("MICrK") 
-BO_initial175 %>% filter(Pools %in% MICrK_pool) %>% ggplot(aes(x=Carbon_SP, y=Carbon_CE)) + geom_point(aes(color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + facet_grid(.~Pools) + 
-  geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16)
+BO_initial190 %>% filter(Pools %in% MICrK_pool) %>% ggplot(aes(x=Carbon_SP, y=Carbon_CE)) + geom_point(aes(color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + facet_grid(.~Pools) + 
+  geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) +ylim(0,3.6) +xlim(0,1.5)
 #combining all into one plot
 BO_initial_sum <- rbind(BO_initial175, BO_initial176, BO_initial190) %>% group_by(SITE, Litter_Type, CALC_MET, SM_Type, Pools) %>% 
   summarise(sp.avg =mean(Carbon_SP), cal.avg =mean(Carbon_CE), n=n(),
   lci.sp = sp.avg - qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_SP)/sqrt(n)), uci.sp = sp.avg + qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_SP)/sqrt(n)),
   lci.cal = cal.avg - qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_CE)/sqrt(n)), uci.cal = cal.avg + qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_CE)/sqrt(n)))
 LITm_pool <- c("LITm")
-BO_initial_sum %>% filter(Pools %in% LITm_pool) %>% ggplot() + geom_point(aes(x=sp.avg, y=cal.avg, color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + 
-  ylab(expression(paste("Calibrated model C (kg C m"^"-2"*")"))) + xlab(expression(paste("Default model C (kg C m"^"-2"*")"))) +
-  facet_grid(.~Pools) + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16)
+tiff("MSBio_Fig4_LITm.tiff", units="px", width=950, height=1150, res=300)
+BO_initial_sum %>% filter(Pools %in% LITm_pool) %>% ggplot() + geom_point(aes(x=sp.avg*1000, y=cal.avg*1000, color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + 
+  ylab(expression(paste("Steady state C (g C m"^"-2"*")"))) + xlab(expression(paste("Steady state C (g C m"^"-2"*")"))) +
+  facet_grid(.~Pools) + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) + theme(legend.position="none")
   #geom_errorbar(aes(x=sp.avg, y=cal.avg, ymin=lci.cal, ymax=uci.cal)) +
+dev.off()
 high_pools <- c("LITs", "SOMa", "SOMc")
 BO_initial_sum %>% filter(Pools %in% high_pools) %>% ggplot() + geom_point(aes(x=sp.avg, y=cal.avg, color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + 
   ylab(expression(paste("Calibrated model C (kg C m"^"-2"*")"))) + xlab(expression(paste("Default model C (kg C m"^"-2"*")"))) +
   facet_grid(.~Pools) + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16)
 MICrK_pool <- c("MICrK")
+tiff("MSBio_Fig4_MICrK.tiff", units="px", width=850, height=1150, res=300)
 BO_initial_sum %>% filter(Pools %in% MICrK_pool) %>% ggplot() + geom_point(aes(x=sp.avg, y=cal.avg, color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + 
   ylab("Calibrated model") + xlab("Default model") + xlab("Copiotroph:oligotroph") + ylab("Copiotroph:oligotroph") +
+  facet_grid(.~Pools) + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) + theme(legend.position="none")
+dev.off()
+#other pools
+MIC_pools <- c("MICr", "MICk")
+BO_initial_sum %>% filter(Pools %in% MIC_pools) %>% ggplot() + geom_point(aes(x=sp.avg, y=cal.avg, color=SITE, shape=SM_Type), alpha=0.5, size=3) + 
+  ylab("Calibrated model") + xlab("Default model") + xlab("Copiotroph or oligotroph C") + ylab("Copiotroph or oligotroph C") +
   facet_grid(.~Pools) + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16)
 #decomposition rates
 #scaled by microbial biomass or initial litter - checked and the same for any calibration
@@ -501,14 +527,44 @@ BO_Decomp_SP2 <- BAGS_out_AllSites_SP %>% mutate(SITE.LQ = paste(SITE, Litter_Ty
             Dkm = mean(Decomp_rate_km), Dks = mean(Decomp_rate_ks)) %>% 
   pivot_longer(4:7, names_to = 'Pools', values_to = 'Carbon_SP') %>% 
   mutate(combo = paste(SITE, Litter_Type, SM_Type, Pools, sep=".")) %>% select(Carbon_SP, combo)
-BO_Decomp_CE2 <- BAGS_out_AllSites_CalES %>% filter(DAY>315) %>% mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% inner_join(LB.i, by="SITE.LQ") %>% group_by(SITE, Litter_Type, SM_Type) %>%
+BO_Decomp_CE2 <- BAGS_out_AllSites_ES190 %>% filter(DAY>315) %>% mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% inner_join(LB.i, by="SITE.LQ") %>% group_by(SITE, Litter_Type, SM_Type) %>%
   summarise(Drm = mean(Decomp_rate_rm), Drs = mean(Decomp_rate_rs), Dkm = mean(Decomp_rate_km), Dks = mean(Decomp_rate_ks)) %>% 
   pivot_longer(4:7, names_to = 'Pools', values_to = 'Carbon_CE') %>% 
   mutate(combo = paste(SITE, Litter_Type, SM_Type, Pools, sep="."))
-BO_decomp2 <- inner_join(BO_Decomp_SP2, BO_Decomp_CE2, by='combo') %>% mutate(SITE.LQ = paste(SITE.x, Litter_Type.x, sep=".")) %>% inner_join(BAGS2, by="SITE.LQ")
+BO_decomp190.2 <- inner_join(BO_Decomp_SP2, BO_Decomp_CE2, by='combo') %>% mutate(SITE.LQ = paste(SITE.x, Litter_Type.x, sep=".")) %>% inner_join(BAGS2, by="SITE.LQ")
 BO_decomp2 %>% group_by(SITE.x,Litter_Type.x, SM_Type) %>% summarise(decomp.SP = mean(Carbon_SP), decomp.CE = mean(Carbon_CE), fMET=mean(CALC_MET)) %>%
   ggplot(aes(x=decomp.SP, y=decomp.CE)) + geom_point(aes(color=fMET), alpha=0.5, size=3) + #facet_grid(.~Pools) + 
   geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) #filter(Pools=="Dkm") %>%
+#means of BO
+BO_decomp_sum2 <- rbind(BO_decomp175.2, BO_decomp176.2, BO_decomp190.2) %>% group_by(SITE.x, Litter_Type.x, CALC_MET, SM_Type, Pools) %>% 
+  summarise(sp.avg =mean(Carbon_SP), cal.avg =mean(Carbon_CE), n=n(),
+            lci.sp = sp.avg - qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_SP)/sqrt(n)), uci.sp = sp.avg + qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_SP)/sqrt(n)),
+            lci.cal = cal.avg - qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_CE)/sqrt(n)), uci.cal = cal.avg + qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_CE)/sqrt(n)))
+Decomp_pools <- c("Drs", "Dkm") # "Drs", "Dkm", "Drm", "Dks"
+tiff("MSBio_Fig4_decomp.tiff", units="px", width=1650, height=1150, res=300)
+BO_decomp_sum2 %>% filter(Pools %in% Decomp_pools) %>% ggplot(aes(x=sp.avg*24000, y=cal.avg*24000)) + geom_point(aes(color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + facet_grid(.~Pools) + 
+  geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) + theme(legend.position="none") +
+  xlab(expression(paste("Decomposition flux (g C m"^"-2"*" d"^"-1"*")"))) + ylab(expression(paste("Decomposition flux (g C m"^"-2"*" d"^"-1"*")"))) #filter(Pools=="Dkm") %>%
+dev.off()
+#litterbag decomposition - work n this!!
+BO_Decomp_SP3 <- BAGS_out_AllSites_SP %>% mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% inner_join(LB.i, by="SITE.LQ") %>% filter(DAY>315) %>% 
+  group_by(SITE,Litter_Type, SM_Type) %>% summarise(LBm = mean(as.numeric(LITBAGm)), LBs = mean(as.numeric(LITBAGs))) %>% 
+  pivot_longer(4:5, names_to = 'Pools', values_to = 'Carbon_SP') %>% 
+  mutate(combo = paste(SITE, Litter_Type, SM_Type, Pools, sep=".")) %>% select(Carbon_SP, combo)
+BO_Decomp_CE3 <- BAGS_out_AllSites_ES175 %>% filter(DAY>315) %>% mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% inner_join(LB.i, by="SITE.LQ") %>% group_by(SITE, Litter_Type, SM_Type) %>%
+  summarise(LBm = mean(as.numeric(LITBAGm)), LBs = mean(as.numeric(LITBAGs))) %>% 
+  pivot_longer(4:5, names_to = 'Pools', values_to = 'Carbon_CE') %>% 
+  mutate(combo = paste(SITE, Litter_Type, SM_Type, Pools, sep="."))
+BO_decomp175.3 <- inner_join(BO_Decomp_SP3, BO_Decomp_CE3, by='combo') %>% mutate(SITE.LQ = paste(SITE.x, Litter_Type.x, sep=".")) %>% inner_join(BAGS2, by="SITE.LQ")
+#means of BO
+BO_decomp_sum3 <- rbind(BO_decomp175.3, BO_decomp176.3, BO_decomp190.3) %>% group_by(SITE.x, Litter_Type.x, CALC_MET, SM_Type, Pools) %>% 
+  summarise(sp.avg =mean(Carbon_SP), cal.avg =mean(Carbon_CE), n=n(),
+            lci.sp = sp.avg - qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_SP)/sqrt(n)), uci.sp = sp.avg + qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_SP)/sqrt(n)),
+            lci.cal = cal.avg - qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_CE)/sqrt(n)), uci.cal = cal.avg + qt(1 - ((1 - 0.95) / 2), n - 1) * (sd(Carbon_CE)/sqrt(n)))
+LB_pools <- c("LBm", "LBs") # "Drs", "Dkm", "Drm", "Dks"
+BO_decomp_sum3 %>% filter(Pools %in% LB_pools) %>% ggplot(aes(x=sp.avg, y=cal.avg)) + geom_point(aes(color=CALC_MET, shape=SM_Type), alpha=0.5, size=3) + facet_grid(.~Pools) + 
+  geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) + theme(legend.position="none") +
+  xlab(expression(paste("Litterbag C (kg C m"^"-2"*")"))) + ylab(expression(paste("Litterbag C (kg C m"^"-2"*")"))) #filter(Pools=="Dkm") %>%
 #relationships between variables 
 BAGS_out_AllSites_ES190 %>% filter(DAY==315) %>% mutate(SITE.LQ = paste(SITE, Litter_Type, sep=".")) %>% inner_join(BAGS2, by="SITE.LQ") %>%
   ggplot(aes(y=MICr/MICk, x=CALC_MET)) + geom_point(aes(color=LITm/LITs, shape=SM_Type), alpha=0.5, size=3) + ylim(0,3) #+ xlim(0.05,0.25)#color=CALC_MET, 
@@ -633,10 +689,12 @@ summary(modelVobs)
 sqrt(mean((df_LML_sum$mean.ML - df_LML_sum$mean.LPL)^2)) #RMSE
 (1/length(df_LML_sum$n))*sum(df_LML_sum$mean.ML - df_LML_sum$mean.LPL) #bias
 df_LML_sum <- df_LML_sum %>% mutate(SITE=factor(SITE, levels=c("TREE", "BART", "HARV", "GRSM", "SERC", "TALL", "LENO"))) #MAT order
+tiff("MSBio_Fig2_Cal_inset.tiff", units="px", width=1100, height=1030, res=300)
 ggplot(df_LML_sum, aes(x=mean.ML, y=mean.LPL)) + geom_point(aes(color=SITE), size=4) + geom_smooth(method = "lm", color="black")  + xlim(0,80) + ylim(0,80) +
   geom_errorbar(aes(ymin=lci.LPL, ymax=uci.LPL, color=SITE), size=1) + geom_errorbarh(aes(xmin=m.lci.ML, xmax=m.uci.ML, color=SITE), size=1) +
   xlab("Observed litter percent C loss") + ylab("Modeled litter percent C loss") + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) + 
-  scale_color_manual(values = colorBlind7)
+  scale_color_manual(values = colorBlind7) + theme(legend.position="none")
+dev.off()
 
 #checking paramter relationships of top Psets
 ES_fit_best <- ES_fit %>% filter(RMSE>5.3 & RMSE < 5.8) %>% filter(i != 48) %>% filter(i != 107) %>% mutate(ID=i) %>% inner_join(ES_Psets_all, by='ID')
@@ -659,11 +717,11 @@ DI_means <- DailyInput_SM %>% mutate(SITE.SM = paste(SITE, SM_type, sep = ".")) 
 #initial MICrK
 #BAGS_out_AllSites_ES$ID <- rep(1:18, each = 22995)
 #ID == 68 | ID==16 | ID== 64 | ID==70 | ID==52
-MIC_init <- BAGS_out_AllSites_Cal %>% filter(ID == 190) %>% filter(DAY == 315) %>%mutate(MICrK.i =  MICr/MICk)%>%
-  mutate(SITE.SM.LQ = paste(SITE, SM_Type, Litter_Type, sep = ".")) %>% select(SITE.SM.LQ, MICrK.i) #%>% filter(ID == 175)
+MIC_init <- BAGS_out_AllSites_SP %>% filter(DAY == 315) %>%mutate(MICrK.i =  MICr/MICk)%>% mutate(MICr.i = MICr)%>% mutate(MICK.i = MICk)%>%
+  mutate(SITE.SM.LQ = paste(SITE, SM_Type, Litter_Type, sep = ".")) %>% select(SITE.SM.LQ, MICrK.i, MICr.i, MICK.i) #%>% filter(ID == 175)
 #need bag means!
 BAGS_LIGN <- MSBio_BAGS %>% mutate(SITE.LQ = paste(SITE, TYPE, sep = ".")) %>% select(SITE.LQ, BAG_LIG_N)
-df_analysis <- df_LML %>% filter(ID == 190) %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>% 
+df_analysis <- df_LML %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>% 
   mutate(SITE.SM.LQ = paste(SITE, SM_Type, Litter_Type, sep = ".")) %>% mutate(SITE.SM = paste(SITE, SM_Type, sep = ".")) %>%
   mutate(SITE.LQ = paste(SITE, Litter_Type, sep = ".")) %>% inner_join(DI_means, by="SITE.SM") %>% inner_join(MIC_init, by="SITE.SM.LQ") %>% 
   inner_join(BAGS_LIGN, by="SITE.LQ") %>% mutate(LQ.SM=paste(Litter_Type, SM_Type, sep=".")) # %>% filter(ID == 175)
@@ -682,6 +740,7 @@ df_check$log_WS <- log(df_check$W_SCALAR_mean)
 #effect size
 #df_ES <- df_check %>% mutate_at(vars(c("log_WS", "BAG_LIG_N", "MICrK.i")), ~(scale(.) %>% as.vector))
 Obs_ES_mod <- lmer(LIT_PerLoss ~ scale(log(W_SCALAR_mean))+scale(BAG_LIG_N)+scale(MICrK.i)+ (1|SITE/LQ.SM), data = df_check) #MAT #scale(BAG_LIG_N)+
+#Obs_ES_mod <- lmer(LIT_PerLoss ~ scale(log(W_SCALAR_mean))+scale(BAG_LIG_N)+scale(MICr.i)+scale(MICK.i)+ (1|SITE/LQ.SM), data = df_check) #MAT #scale(BAG_LIG_N)+
 #Obs_ES_mod2 <- lmer(LIT_PerLoss ~ log_WS+BAG_LIG_N+MICrK.i+ (1|SITE), data = df_ES)
 summary(Obs_ES_mod)
 Obs_ES <- as.data.frame(fixef(Obs_ES_mod)) #fixed effects coefficients as effect size
@@ -691,30 +750,58 @@ colnames(Obs_ES)[1] <- "value"
 Obs_ES <- Obs_ES[-1, ]
 Obs_ES$mult <- ifelse(Obs_ES$value <0, -1, 1)
 Obs_ES$rel_ES <- (abs(Obs_ES$value)/sum(abs(Obs_ES$value))) * 100 * Obs_ES$mult
-Obs_ES$Vars <- factor(Obs_ES$Vars, levels=c('scale(MICrK.i)','scale(BAG_LIG_N)', 'scale(log(W_SCALAR_mean))'),
-                       labels=c('MICrK.i','BAG_LIG_N', 'log_WS'))
+#Obs_ES$Vars <- factor(Obs_ES$Vars, levels=c('scale(MICrK.i)','scale(BAG_LIG_N)', 'scale(log(W_SCALAR_mean))'),
+#                       labels=c('MICrK.i','BAG_LIG_N', 'log_WS'))
 ggplot(Obs_ES, aes(x=Vars, y=rel_ES)) + geom_bar(stat="identity", fill="darkolivegreen3") + coord_flip() + 
   geom_text(aes(label=round(rel_ES, digits=1), vjust=1.5), size=5) +theme_bw(base_size = 16)
 Obs_ES_SP<- Obs_ES 
 rbind(Obs_ES176, Obs_ES175, Obs_ES190) %>% group_by(Vars) %>% summarise(mean.rES = mean(rel_ES), sd.rES = sd(rel_ES)) %>%
   ggplot(aes(x=Vars, y=mean.rES)) + geom_bar(stat="identity", fill="darkolivegreen3", aes(group=Vars)) +  geom_errorbar(aes(ymax=mean.rES+sd.rES, ymin=mean.rES-sd.rES), width=0.1, size=1) + 
   coord_flip() + geom_text(aes(label=round(mean.rES, digits=1), vjust=1.5), size=5) +theme_bw(base_size = 16) #, hjust=1.1
-Obs_ES_Cal <- rbind(Obs_ES_176, Obs_ES_175, Obs_ES_190) %>% group_by(Vars) %>% summarise(mean.rES = mean(rel_ES), sd.rES = sd(rel_ES)) %>% mutate(ID="Cal")
+Obs_ES_Cal <- rbind(Obs_ES176, Obs_ES175, Obs_ES190) %>% group_by(Vars) %>% summarise(mean.rES = mean(rel_ES), sd.rES = sd(rel_ES)) %>% mutate(ID="Cal")
 Obs_ES_SP2 <- Obs_ES_SP %>% mutate(mean.rES=rel_ES, sd.rES=0, ID="SP") %>% select(Vars, mean.rES, sd.rES, ID)
 #creating data frame for observed effect sizes
-Vars= c('log_WS','BAG_LIG_N', 'MICrK.i')
+Vars= c('scale(log(W_SCALAR_mean))','scale(BAG_LIG_N)', 'scale(MICrK.i)')
 mean.rES = c(42.8, -34.2, -22.9)
 sd.rES = c(0,0,0)
 ID= c("Obs", "Obs", "Obs")
 Obs_ES_Obs <- data.frame(Vars, mean.rES, sd.rES, ID)
+tiff("MSBio_Fig1.tiff", units="px", width=2000, height=1500, res=300)
 rbind(Obs_ES_Obs, Obs_ES_SP2, Obs_ES_Cal) %>% ggplot() + 
-  geom_bar(aes(x=factor(Vars, level=c('log_WS', 'BAG_LIG_N', 'MICrK.i'), labels = c("Soil moisture", "Litter quality", "Microbial community")),
+  geom_bar(aes(x=factor(Vars, level=c('scale(log(W_SCALAR_mean))','scale(BAG_LIG_N)', 'scale(MICrK.i)'), labels = c("Soil moisture", "Lignin:N", "Copiotroph:oligotroph")),
         y=mean.rES, fill = factor(ID, level=c('Obs', 'SP', 'Cal'), labels = c("Observations", "Default", "Calibrated"))), stat="identity", position = position_dodge(), color="black", linewidth=1) +
-  geom_errorbar(aes(x=factor(Vars, level=c('log_WS', 'BAG_LIG_N', 'MICrK.i'), labels = c("Soil moisture", "Litter quality", "Microbial community")),
+  geom_errorbar(aes(x=factor(Vars, level=c('scale(log(W_SCALAR_mean))','scale(BAG_LIG_N)', 'scale(MICrK.i)'), labels = c("Soil moisture", "Lignin:N", "Copiotroph:oligotroph")),
                     y=mean.rES, ymax=mean.rES+sd.rES, ymin=mean.rES-sd.rES, 
                     group=factor(ID, level=c('Obs', 'SP', 'Cal'), labels = c("Observations", "Default", "Calibrated"))), width=0.1, size=1, position = position_dodge(0.9)) +
   xlab("") + ylab("Relative effect size") + geom_abline(intercept=0, slope=0, color="black", linewidth=0.6) +
   theme_bw(base_size = 16)  + scale_fill_manual(name="Type", values = c(Observations = "black", Default = "white", Calibrated="darkgrey")) 
+dev.off()
+
+#with points for calibrated
+Obs_ES_Cal_points <- rbind(Obs_ES176, Obs_ES175, Obs_ES190) %>% mutate(ID="Cal") %>% select(Vars, rel_ES, ID) 
+Obs_ES_SP_points <- Obs_ES_SP2 %>% mutate(rel_ES = c(NA,NA,NA)) %>% select(Vars, rel_ES, ID)
+Obs_ES_Obs_points <- Obs_ES_Obs %>% mutate(rel_ES = c(NA,NA,NA)) %>% select(Vars, rel_ES, ID)
+ES_points <- rbind(Obs_ES_Cal_points, Obs_ES_SP_points, Obs_ES_Obs_points)
+Obs_ES_all <- rbind(Obs_ES_Obs, Obs_ES_SP2, Obs_ES_Cal) 
+tiff("MSBio_Fig1.tiff", units="px", width=2000, height=1500, res=300)
+ggplot() + 
+  geom_bar(data=Obs_ES_all, aes(x=factor(Vars, level=c('scale(log(W_SCALAR_mean))','scale(BAG_LIG_N)', 'scale(MICrK.i)'), labels = c("Soil moisture", "Lignin:N", "Copiotroph:oligotroph")),
+               y=mean.rES, fill = factor(ID, level=c('Obs', 'SP', 'Cal'), labels = c("Observations", "Default", "Calibrated"))), stat="identity", position = position_dodge(), color="black", linewidth=1) +
+  #geom_errorbar(data=Obs_ES_all, aes(x=factor(Vars, level=c('scale(log(W_SCALAR_mean))','scale(BAG_LIG_N)', 'scale(MICrK.i)'), labels = c("Soil moisture", "Lignin:N", "Copiotroph:oligotroph")),
+  #                  y=mean.rES, ymax=mean.rES+sd.rES, ymin=mean.rES-sd.rES, 
+  #                  group=factor(ID, level=c('Obs', 'SP', 'Cal'), labels = c("Observations", "Default", "Calibrated"))), width=0.1, size=1, position = position_dodge(0.9)) +
+  geom_point(data=ES_points, aes(x=factor(Vars, level=c('scale(log(W_SCALAR_mean))','scale(BAG_LIG_N)', 'scale(MICrK.i)'), labels = c("Soil moisture", "Lignin:N", "Copiotroph:oligotroph")),
+                                    y=rel_ES, fill=factor(ID, level=c('Obs', 'SP', 'Cal'), labels = c("Observations", "Default", "Calibrated"))), 
+             position = position_jitterdodge(dodge.width = 0.9), alpha=0.5, size=2) + #position_dodge(0.9)
+  xlab("") + ylab("Relative effect size") + geom_abline(intercept=0, slope=0, color="black", linewidth=0.6) +
+  theme_bw(base_size = 16)  + scale_fill_manual(name="Type", values = c(Observations = "black", Default = "white", Calibrated="darkgrey")) 
+dev.off()
+
+ggplot()+
+geom_point(data=ES_points, aes(x=factor(Vars, level=c('scale(log(W_SCALAR_mean))','scale(BAG_LIG_N)', 'scale(MICrK.i)'), labels = c("Soil moisture", "Lignin:N", "Copiotroph:oligotroph")),
+                          y=rel_ES, 
+                          group=factor(ID, level=c('Obs', 'SP', 'Cal'), labels = c("Observations", "Default", "Calibrated"))), 
+           position = position_dodge())
 #collineraity?
 vif(Obs_ES_mod) # for SP: all less than 5, up to 3.6
 #for calibrated: (175) all less than 5, up to 3.6; (176) all less than 5, up to 4.7; (190) all less than 5, up to 4.0

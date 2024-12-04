@@ -209,19 +209,19 @@ LITi = 0.1
 df_LML <- df %>% mutate(SITE.rn = paste(SITE, run_num, sep = ""))  %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100) %>% 
   mutate(field.day=DAY-314) %>% mutate(SITE.DAY=paste(SITE, field.day, sep=".")) %>% right_join(FieldData, by="SITE.DAY")
 
-#filter for reasonable data
-#if including time varying data
+# #filter for reasonable data
+# #if including time varying data
 # T2_DAY <- df_LML %>% filter(time.point==2) %>% mutate(T2.DAY = DAY) %>% select(SITE, T2.DAY) %>% distinct(SITE, .keep_all = TRUE) %>% filter(complete.cases(SITE,T2.DAY))
 # T1_DAY <- df_LML %>% filter(time.point==1) %>% mutate(T1.DAY = DAY) %>% select(SITE, T1.DAY) %>% distinct(SITE, .keep_all = TRUE) %>% filter(complete.cases(SITE,T1.DAY))
 # df_LML_RI <- df_LML_all %>% inner_join(T2_DAY, by = "SITE") %>% inner_join(T1_DAY, by = "SITE") %>% mutate(field.day=DAY-314) %>% filter(field.day==T1.DAY | field.day==T2.DAY)
-#DI_2y <- rbind(DailyInput, DailyInput)
-#DI_2y$DAY2 <- c(0:365, 0:365, 0:365, 0:364, 0:365, 0:365, 0:365, 366:731, 366:731, 366:731, 364:728, 366:731, 366:731, 366:731) 
-#DI_analysis <- DI_2y %>% inner_join(T2_DAY, by = "SITE") %>% filter(DAY2 >10 & DAY2 <= T2.DAY) %>% mutate(SITE.DAY = paste(SITE, DAY2, sep = "."))
-# df_analysis <- df_LML_RI %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>% 
+# DI_2y <- rbind(DailyInput, DailyInput)
+# DI_2y$DAY2 <- c(0:365, 0:365, 0:365, 0:364, 0:365, 0:365, 0:365, 366:731, 366:731, 366:731, 364:728, 366:731, 366:731, 366:731)
+# DI_analysis <- DI_2y %>% inner_join(T2_DAY, by = "SITE") %>% filter(DAY2 >10 & DAY2 <= T2.DAY) %>% mutate(SITE.DAY = paste(SITE, DAY2, sep = "."))
+# df_analysis <- df_LML_RI %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>%
 #   mutate(SITE.DAY = paste(SITE, DAY, sep = ".")) %>% inner_join(DI_analysis, by="SITE.DAY") %>% mutate(T2.DAY = T2.DAY.x, LIG_N = LIG_N.y, W_SCALAR = W_SCALAR.y) %>%
 #   select(SITE.x, DAY.x, T1.DAY, T2.DAY, LIT_PerLoss, MICrK, MIC, SOC,run_num, Tau_r, Tau_K, CUE_x, vMOD_x, MAT, LIG_N, W_SCALAR)
-#if only using one timepoint
-#df_analysis <- df_LML %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>%
+# #if only using one timepoint
+# df_analysis <- df_LML %>% mutate(MICrK = MICr/MICk) %>% mutate(MIC=MICr+MICk) %>% mutate(SOC = SOMa+SOMc+SOMp) %>%
 #  filter(time.point==2) %>% select(SITE, LIT_PerLoss,
 #                                   MICrK, MIC, SOC, run_num, Tau_r, Tau_K, CUE_x, vMOD_x,
 #                                   TSOI, LIG_N, W_SCALAR)

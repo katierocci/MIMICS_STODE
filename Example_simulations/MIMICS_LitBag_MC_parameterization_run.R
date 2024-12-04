@@ -84,7 +84,7 @@ BAGS_mean <- filter(BAGS, TYPE == "LIG_N_sp1")
 ####################################
 
 # Set desired number of random parameter runs
-MIM_runs <- 50
+MIM_runs <- 5
 
 ### Create random parameter dataframe
 ## Parameter range informed by range observed over 10+ MCMC analysis results

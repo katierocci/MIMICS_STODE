@@ -195,7 +195,7 @@ filter(site %in% site_val)
 BAGS_out_AllSites_ES_val$ID <- as.factor(rep(1:3, each=29565))
 # BAGS_out_AllSites_test$ID <- as.factor(1:18)
 # ID_test <- filter(BAGS_out_AllSites_test, DAY==50)
-BAGS_out_plot <- BAGS_out_AllSites_ES_val %>% mutate(SITE.LT = paste(SITE, Litter_Type, sep=".")) %>% mutate(LIT_PerLoss = ((0.1 - (LITBAGm+LITBAGs))/0.1)*100)
+BAGS_out_plot <- BAGS_out_AllSites_SP %>% mutate(SITE.LT = paste(SITE, Litter_Type, sep=".")) %>% mutate(LIT_PerLoss = ((0.1 - (LITBAGm+LITBAGs))/0.1)*100)
 #wide format for plotting
 BAGS_out_wide = BAGS_out_plot %>% select(SITE, ID, Litter_Type, SM_Type, DAY, LIT_PerLoss) %>% #ID, 
   pivot_wider(names_from = Litter_Type, values_from = LIT_PerLoss)
@@ -216,8 +216,9 @@ ggplot() +
 #summary data - works ok for visualization!
 val_colors = c("#882255", "#999933", "#332288")
 BO_plot_sum <- BAGS_out_plot  %>% group_by(SITE,DAY) %>% summarise(mean=mean(LIT_PerLoss), min=min(LIT_PerLoss), max=max(LIT_PerLoss)) #,SM_Type
+tiff("MSBio_Fig3_SP.tiff", units="px", width=2000, height=1500, res=300)
 ggplot() +
-  geom_ribbon(data=BO_plot_sum, aes(y=100-mean, x=DAY-315, ymin = 100-min, ymax=100-max, group=SITE, fill=SITE), alpha = 0.3) +
+  geom_ribbon(data=BO_plot_sum, aes(y=100-mean, x=DAY-315, ymin = 100-min, ymax=100-max, group=SITE, fill=SITE, color=SITE), alpha = 0.3, size=0.7) +
   #geom_line(data=BO_plot_sum, aes(y=100-mean, x=DAY-315, group=SITE, color=SITE), linewidth=2, alpha = 0.3) +
   geom_point(data=LML_sum2, aes(y=100-mean.ML, x=doy, group=site, color=site), size = 3) +
   geom_errorbar(data=LML_sum2, aes(y=100-mean.ML, x=doy, ymin = 100-lci.ML, ymax = 100-uci.ML, group=site, color=site), width=0,linewidth=1) +
@@ -227,6 +228,7 @@ ggplot() +
   theme_bw(base_size = 20) +
   scale_color_manual(values=val_colors) + scale_fill_manual(values=val_colors) #+
   #facet_wrap(.~SM_Type)
+dev.off()
 #seperate plotting of LITm and LITs
 LIT_init <- BAGS_out_AllSites_SP %>% filter(DAY == 315) %>% mutate(LITm.i = LITBAGm) %>% mutate(LITs.i = LITBAGs) %>% 
   mutate(SITE.LT.SM = paste(SITE, Litter_Type, SM_Type,ID, sep=".")) %>% select(SITE.LT.SM, LITm.i, LITs.i)
@@ -260,7 +262,7 @@ FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(S
 #df <- BAGS_out_AllSites_DI %>% left_join(LIT_init, by = "SITE")
 #BAGS_out_AllSites_ES_noTk$ID <- as.factor(rep(1:12, each=68985))
 LITi = 0.1
-df_LML <- BAGS_out_AllSites_SP %>% mutate(DAY.LitOut = DAY -314) %>% mutate(SITE.DAY=paste(SITE, DAY.LitOut, sep=".")) %>% 
+df_LML <- BAGS_out_AllSites_ES_val %>% mutate(DAY.LitOut = DAY -314) %>% mutate(SITE.DAY=paste(SITE, DAY.LitOut, sep=".")) %>% 
   right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
 #write.csv#write.csv#write.csv(df_LML, 'df_LML_ES_vMOD_noTk_ParamUncert.csv')
 #creating table with LML for each day
@@ -313,11 +315,12 @@ summary(modelVobs) #R2
 sqrt(mean((df_LML_sum$mean.ML - df_LML_sum$mean.LPL)^2)) #RMSE
 (1/length(df_LML_sum$n))*sum(df_LML_sum$mean.ML - df_LML_sum$mean.LPL) #bias
 val_colors = c("#882255", "#999933", "#332288")
+tiff("MSBio_Fig3_Cal_inset.tiff", units="px", width=1100, height=1030, res=300)
 ggplot(df_LML_sum, aes(x=mean.ML, y=mean.LPL)) + geom_point(aes(color=SITE), size=4) + geom_smooth(method = "lm", color="black")  + xlim(0,80) + ylim(0,80) +
   geom_errorbar(aes(ymin=lci.LPL, ymax=uci.LPL, color=SITE), size=1) + geom_errorbarh(aes(xmin=m.lci.ML, xmax=m.uci.ML, color=SITE), size=1) +
   xlab("Observed litter percent C loss") + ylab("Modeled litter percent C loss") + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) +
-  scale_color_manual(values = val_colors)
-
+  scale_color_manual(values = val_colors) + theme(legend.position="none")
+dev.off()
 
 ####
 #RWA and effect size estimation - set up for multiple soil moistures and multiple litter qualities

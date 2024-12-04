@@ -16,7 +16,7 @@ MIMrepeat <- function(forcing_df, litBAG, dailyInput, rparams) { #need to remove
   # Kslope <<- Kslope_default * rparams$Kslope_x[1]
   # Kint <<- Kint_default * rparams$Kint_x[1]
   # Tau_MULT <<- Tau_MULT_default * rparams$Tau_x[1] 
-  #  tau_r <<- c(tau_r_default[1], tau_r_default[2] * rparams$Tau_r[1]) #can multiply first part of tau_r to multiply total value or second part to infleunce multiplier on fMET
+   tau_r <<- c(tau_r_default[1], tau_r_default[2] * rparams$Tau_r[1]) #can multiply first part of tau_r to multiply total value or second part to infleunce multiplier on fMET
   #  tau_K <<- c(tau_K_default[1], tau_K_default[2] * rparams$Tau_K[1]) #can multiply first part of tau_r to multiply total value or second part to infleunce multiplier on fMET
   #  CUE <<- CUE_default * rparams$CUE_x[1]
   #  CUE <<- c(CUE_default[1], CUE_default[2], CUE_default[3] * rparams$CUE_x[1], CUE_default[4] * rparams$CUE_x[1])  #add indexing to just get r or K-selected
@@ -27,9 +27,9 @@ MIMrepeat <- function(forcing_df, litBAG, dailyInput, rparams) { #need to remove
   # kMOD <<- c(kMOD_default[1] * rparams$kMOD_x[1], kMOD_default[2] * rparams$kMOD_x[1], kMOD_default[3] * rparams$kMOD_x[1], kMOD_default[4], kMOD_default[5], kMOD_default[6]) #for just r or K
   # aV <<- aV_default * rparams$aV_x[1]
  # fmet_p <<- c(fmet_p_default[1], fmet_p_default[2] * rparams$fM_x[1], fmet_p_default[3])
-#  beta <<- beta_default * rparams$beta_x[1]
+  beta <<- beta_default * rparams$beta_x[1]
    #beta <<- c(beta_default[1] * rparams$beta_x[1], beta_default[2]) #add indexing for r r K-selected
-   beta <<- c(beta_default[1] * rparams$beta_r[1], beta_default[2] * rparams$beta_k[1]) #changing r and K at teh same time
+  # beta <<- c(beta_default[1] * rparams$beta_r[1], beta_default[2] * rparams$beta_k[1]) #changing r and K at teh same time
   #below should go through each site with the same litter at all
   #MIMrun <- forcing_df %>% split(1:nrow(forcing_df)) %>% map(~MIMICS_LITBAG(forcing_df = ., litBAG = BAGS_BART, nspin_yrs=2,
   #                                                                         nspin_days=0, litadd_day=10)) %>% bind_rows() #_BART

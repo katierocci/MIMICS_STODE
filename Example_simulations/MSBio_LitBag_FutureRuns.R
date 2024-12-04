@@ -302,16 +302,16 @@ ggplot() +
   scale_fill_manual(name='Model',values=c(Default_historical="dodgerblue", Calibrated_historical="pink", Default_future="blue", Calibrated_future="red"))
 
 #10-year decomp values
-BO_plot_sum <- rbind(BO_plot_sum1%>%mutate(type="sp_2072"), BO_plot_sum2%>%mutate(type="cal_2072"), 
-                     BO_plot_sum3%>%mutate(type="sp_2022"), BO_plot_sum4%>%mutate(type="cal_2022")) %>%filter(DAY>314&SM_Type=="mean")
-ggplot(BO_plot_sum, aes(x=SITE, y=100-mean,fill=type)) + geom_boxplot() +theme_bw(base_size = 16) +
-  ylab("Litter mass \n remaining at 10 years") + scale_fill_manual(values = c("pink", "red", "dodgerblue", "blue"))
-write.csv(BO_plot_sum, "BO_plot_sum_10yr.csv")
-#asymtote decomp values
-BO_plot_sum <- rbind(BO_plot_sum1%>%mutate(type="sp_2072"), BO_plot_sum2%>%mutate(type="cal_2072"), 
-                     BO_plot_sum3%>%mutate(type="sp_2022"), BO_plot_sum4%>%mutate(type="cal_2022")) %>%filter(DAY==1000)
-ggplot(BO_plot_sum, aes(x=SITE, y=100-mean,fill=type)) + geom_boxplot() +theme_bw(base_size = 16) +
-  ylab("Litter mass \n remaining at 1000 days") + scale_fill_manual(values = c("pink", "red", "dodgerblue", "blue"))
+# BO_plot_sum <- rbind(BO_plot_sum1%>%mutate(type="sp_2072"), BO_plot_sum2%>%mutate(type="cal_2072"), 
+#                      BO_plot_sum3%>%mutate(type="sp_2022"), BO_plot_sum4%>%mutate(type="cal_2022")) %>%filter(DAY>314&SM_Type=="mean")
+# ggplot(BO_plot_sum, aes(x=SITE, y=100-mean,fill=type)) + geom_boxplot() +theme_bw(base_size = 16) +
+#   ylab("Litter mass \n remaining at 10 years") + scale_fill_manual(values = c("pink", "red", "dodgerblue", "blue"))
+# write.csv(BO_plot_sum, "BO_plot_sum_10yr.csv")
+# #asymtote decomp values
+# BO_plot_sum <- rbind(BO_plot_sum1%>%mutate(type="sp_2072"), BO_plot_sum2%>%mutate(type="cal_2072"), 
+#                      BO_plot_sum3%>%mutate(type="sp_2022"), BO_plot_sum4%>%mutate(type="cal_2022")) %>%filter(DAY==1000)
+# ggplot(BO_plot_sum, aes(x=SITE, y=100-mean,fill=type)) + geom_boxplot() +theme_bw(base_size = 16) +
+#   ylab("Litter mass \n remaining at 1000 days") + scale_fill_manual(values = c("pink", "red", "dodgerblue", "blue"))
 
 #other pools besides litter decomp
 BAGS_out_SP_2070s$ID = 1
@@ -335,8 +335,8 @@ ggplot() +
   ylab("Litter") +
   xlab("SITE") +
   theme_bw(base_size = 20)
-#differences between future and historical
-BO_dif  <- BO_all%>% group_by(SITE, type) %>% summarise(LBs_avg=mean(LITBAGs)) %>% pivot_wider(names_from = "type", values_from = "LBs_avg") %>% mutate(sp=((sp_2070-sp_2018)/sp_2018)*100, cal=((cal_2070-cal_2018)/cal_2018)*100) #%>% mutate(LIT2MIC=(LITs+LITm)/(MICr+MICk)) 
+#differences between future and historical - days 315 to 964 (649+315)
+BO_dif  <- BO_all %>% filter(DAY>315 | DAY<964)%>% group_by(SITE, type) %>% summarise(LBm_avg=mean(LITBAGm)) %>% pivot_wider(names_from = "type", values_from = "LBm_avg") %>% mutate(sp=((sp_2070-sp_2018)/sp_2018)*100, cal=((cal_2070-cal_2018)/cal_2018)*100) #%>% mutate(LIT2MIC=(LITs+LITm)/(MICr+MICk)) 
 #means
 ggplot(data=BO_dif) +
   geom_point(data=BO_dif, aes(y=sp, x=SITE,color = SITE, shape="Default"), size=4, stroke=2)+
@@ -347,15 +347,35 @@ ggplot(data=BO_dif) +
   scale_shape_manual(name='Model', breaks=c('Default', 'Calibrated'), values=c('Default'=1, 'Calibrated'=16)) +
   scale_color_manual(values = colorBlind7)
 #means and points under
-BO_dif2 <- BO_all %>% select(SITE, Litter_Type, SM_Type, type, DAY, LITBAGs) %>% filter(DAY>315) %>% group_by(SITE, Litter_Type, SM_Type, type) %>% 
-  summarise(LBs = mean(LITBAGs)) %>% pivot_wider(names_from = "type", values_from = "LBs") %>% 
+BO_dif2 <- BO_all %>% select(SITE, Litter_Type, SM_Type, type, DAY, LITBAGm) %>% filter(DAY>315 | DAY<964) %>% group_by(SITE, Litter_Type, SM_Type, type) %>% 
+  summarise(LBm = mean(LITBAGm)) %>% pivot_wider(names_from = "type", values_from = "LBm") %>% 
   mutate(sp=((sp_2070-sp_2018)/sp_2018)*100, cal=((cal_2070-cal_2018)/cal_2018)*100) 
+tiff("MSBio_Fig6_LITm.tiff", units="px", width=1500, height=1100, res=300)
 ggplot() + geom_point(data=BO_dif2, aes(x=SITE, y=sp, group = SITE, colour = SITE, shape = "Default"), size=3) + 
   geom_point(data=BO_dif2, aes(x=SITE, y=cal, group = SITE, colour = SITE, shape = "Calibrated"), size=3) +
   geom_point(data=BO_dif, aes(x=SITE, y=sp, group = SITE, colour = SITE, shape = "Default"), size=8, alpha=0.6, stroke =2) +
   geom_point(data=BO_dif, aes(x=SITE, y=cal, group = SITE, colour = SITE, shape = "Calibrated"), size=8, alpha=0.6, stroke=2) +
   ylab("Percent difference between \n future and historical (%)") + scale_color_manual(values=colorBlind7) + theme_bw(base_size = 16) + 
+  scale_shape_manual(name='Model', breaks=c('Default', 'Calibrated'), values=c('Default'=1, 'Calibrated'=16)) +ylim(-31, 8) + theme(legend.position = "none")
+dev.off()
+#grouping by deciduous and evergreen
+full_decomp <- read.csv('Example_simulations/Data/full_decomp.csv')
+EG <- c("TSCA", "PIPA2", "ACSA", "PIST")
+MSBio_LitterData <- full_decomp %>% group_by(site, species) %>% summarise(LIG_N_field = mean(lignin.N)) %>% mutate(FG = ifelse(species %in% EG, "Evergreen", "Deciduous"))
+Sp_number <- read.csv("C:/Users/krocci/OneDrive - UCB-O365/Documents/Postdoc/CU/Macrosystems project/Project Code/MIMICS_MSBio_KR/LQ_sum_MS.csv") %>% mutate(site.spp = paste(site, species, sep = ".")) %>% select(site.spp, SP_type)
+MSBio_LitterData <- MSBio_LitterData %>% mutate(site.spp = paste(site, species, sep = ".")) %>% inner_join(Sp_number) %>% select(site, FG, SP_type) %>% mutate(Litter_Type=ifelse(SP_type=="Sp1", "LIG_N_sp1", ifelse(SP_type=="Sp2", "LIG_N_sp2", 'LIG_N_sp3'))) %>% 
+  mutate(site.LT = paste(site, Litter_Type, sep=".")) %>% select(site.LT, FG)
+BO_dif3 <- BO_dif2 %>% mutate(site.LT = paste(SITE, Litter_Type, sep=".")) %>% inner_join(MSBio_LitterData, by='site.LT')
+ggplot() + geom_jitter(data=BO_dif3, aes(x=FG, y=sp, group = SITE, colour = SITE, shape = "Default"), size=5, alpha=0.7) + 
+  geom_jitter(data=BO_dif3, aes(x=FG, y=cal, group = SITE, colour = SITE, shape = "Calibrated"), size=5,alpha=0.7) +
+  ylab("Percent difference between \n future and historical (%)") + scale_color_manual(values=colorBlind7) + theme_bw(base_size = 16) + 
   scale_shape_manual(name='Model', breaks=c('Default', 'Calibrated'), values=c('Default'=1, 'Calibrated'=16)) 
+MSBio_LN <- MSBio_sites %>% select(SITE, LIG_N_sp1, LIG_N_sp2, LIG_N_sp3) %>% pivot_longer(2:4, names_to="Litter_Type", values_to="LIG_N") %>% mutate(site.LT = paste(SITE, Litter_Type, sep=".")) %>% select(site.LT, LIG_N)
+BO_dif4 <- BO_dif3 %>% inner_join(MSBio_LN, by="site.LT")
+ggplot() + geom_jitter(data=BO_dif4, aes(x=LIG_N, y=sp, group = SITE, colour = SITE, shape = "Default"), size=5, alpha=0.7) + 
+  geom_jitter(data=BO_dif4, aes(x=LIG_N, y=cal, group = SITE, colour = SITE, shape = "Calibrated"), size=5,alpha=0.7) +
+  ylab("Percent difference between \n future and historical (%)") + scale_color_manual(values=colorBlind7) + theme_bw(base_size = 16) + 
+  scale_shape_manual(name='Model', breaks=c('Default', 'Calibrated'), values=c('Default'=1, 'Calibrated'=16))
 #just TALL
 BO_dif_TALL  <- BO_all %>% filter(SITE=='TALL')  %>% filter(DAY>315 | DAY<601) %>% group_by(Litter_Type, type) %>% summarise(MICk_avg=mean(MICk)) %>% pivot_wider(names_from = "type", values_from = "MICk_avg") %>% mutate(sp=((sp_2070-sp_2018)/sp_2018)*100, cal=((cal_2070-cal_2018)/cal_2018)*100) #%>% mutate(LIT2MIC=(LITs+LITm)/(MICr+MICk)) 
 ggplot(data=BO_dif_TALL) +
@@ -367,11 +387,12 @@ ggplot(data=BO_dif_TALL) +
   scale_shape_manual(name='Model', breaks=c('Default', 'Calibrated'), values=c('Default'=1, 'Calibrated'=16))
 #loop for summary table of differences between future and historical
 Pools <- c('LITBAGm', 'LITBAGs', 'LITm', 'LITs', 'MICr', 'MICk', 'SOMp', 'SOMc', 'SOMa', 'Decomp_rate_rm', 'Decomp_rate_rs', 'Decomp_rate_km', 'Decomp_rate_ks')
+BO_time <- BO_all %>% filter(DAY>315 | DAY<964)
 CC_difs_sum <- data.frame()
 for (pool in Pools) {
   #pool <- sym(pool)
   pool <- noquote(pool)
-  BO_dif_loop  <- BO_all %>% group_by(SITE, type) %>% summarise(avg=mean(get(pool))) %>% 
+  BO_dif_loop  <- BO_time %>% group_by(SITE, type) %>% summarise(avg=mean(get(pool))) %>% 
     pivot_wider(names_from = "type", values_from = "avg") %>% 
     mutate(sp=((sp_2070-sp_2018)/sp_2018)*100, cal=((cal_2070-cal_2018)/cal_2018)*100)
   BO_dif_loop$POOL <- pool
@@ -382,7 +403,7 @@ CC_difs_table <- CC_difs_sum %>% select(SITE, POOL, sp, cal) %>% pivot_longer(3:
   pivot_wider(names_from = POOL, values_from = PerDiff)
 write.csv(CC_difs_table, 'CC_difs_table.csv')
 
-#comparing decomposition rates from 2022 to 2072
+#comparing decomposition rates from 2022 to 2072 - creates dataset we need for model
 FieldData <- LML_sum2 %>% mutate(DAY=doy, SITE=site) %>% mutate(SITE.DAY=paste(SITE, DAY, sep=".")) %>% select(time.point,SITE.DAY, mean.ML, lci.ML, uci.ML)
 LITi = 0.1
 #1=sp_2070; 2=cal_2070; 3=sp_2018; 4=cal_2018
@@ -392,6 +413,12 @@ BAGS_out_Cal_2070s$type="cal_2072"
 BAGS_out_AllSites_SP$ID = 1
 BAGS_out_AllSites_SP$type="sp_2022"
 BAGS_out_AllSites_Cal$type="cal_2022"
+df_LML1 <- BAGS_out_SP_2070s %>% mutate(DAY.LitOut = DAY -314) %>% mutate(SITE.DAY=paste(SITE, DAY.LitOut, sep=".")) %>%
+  right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
+df_LML2 <- BAGS_out_Cal_2070s %>% mutate(DAY.LitOut = DAY -314) %>% mutate(SITE.DAY=paste(SITE, DAY.LitOut, sep=".")) %>%
+  right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
+df_LML3 <- BAGS_out_AllSites_SP %>% mutate(DAY.LitOut = DAY -314) %>% mutate(SITE.DAY=paste(SITE, DAY.LitOut, sep=".")) %>%
+  right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
 df_LML4 <- BAGS_out_AllSites_Cal %>% mutate(DAY.LitOut = DAY -314) %>% mutate(SITE.DAY=paste(SITE, DAY.LitOut, sep=".")) %>%
   right_join(FieldData, by="SITE.DAY") %>% mutate(LIT_PerLoss = ((LITi - (LITBAGm+LITBAGs))/LITi)*100)
 #1:1 plots
@@ -409,6 +436,8 @@ LML_121 <- rbind(LML_121.175, LML_121.176, LML_121.190) %>% group_by(SITE, Litte
 #Litter_Type, SM_Type, 
 #LML_121 <- LML_121 %>% mutate(SITE=factor(SITE, levels=c("TREE", "TALL", "BART", "HARV", "SERC", "LENO", "GRSM"))) #ANPP order
 LML_121 <- LML_121 %>% mutate(SITE=factor(SITE, levels=c("TREE", "BART", "HARV", "GRSM", "SERC", "TALL", "LENO"))) #MAT order
+
+
 #sp vs calibrated
 #ggplot(LML_121) + geom_point(aes(x=sp_2070, y=cal_2070, shape = Litter_Type, color="Transient"), size=3, alpha=0.5) + geom_point(aes(x=sp_2018, y=cal_2018, shape=Litter_Type, color="SSP-370"), size=3, alpha=0.5) + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) + 
 #  xlab("Default model litter mass loss (%)") + ylab("Calibrated model litter mass loss (%)") + facet_wrap(.~SITE) + scale_color_manual(name='Type', breaks=c('Transient', 'SSP-370'), values=c('Transient'='red', 'SSP-370'='blue'))
@@ -430,14 +459,16 @@ ggplot(LML_121) + geom_point(aes(x=sp_2022.avg, y=sp_2072.avg, shape = "Default"
 ggplot(LML_121) + geom_point(aes(x=sp_2022.avg, y=sp_2072.avg, shape = "Default", color=SITE), size=4, alpha=0.8) + 
   geom_point(aes(x=cal_2022.avg, y=cal_2072.avg, shape="Calibrated", color=SITE), size=4, alpha=0.8) + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) + 
   xlab("Historic litter mass loss (%)") + ylab("Future litter mass loss under climate change (%)") + scale_shape_manual(name='Model', breaks=c('Default', 'Calibrated'), values=c('Default'=1, 'Calibrated'=16)) +scale_color_manual(values = colorBlind7)
-#three facets for coldest sites, mid sites, and warmest sites
+#three facets for coldest sites, mid sites, and warmest sites - paper figure!!
 cold <- c('TREE', 'BART', 'HARV')
 mid <- c('GRSM', 'SERC')
 LML_121_TG <- LML_121 %>% mutate(Temp_group = ifelse(SITE %in% cold, "6.8-8.9", ifelse(SITE %in% mid, "14.7-14.8", "18.1-19.2"))) %>% 
   mutate(Temp_group = factor(Temp_group, levels=c('6.8-8.9', '14.7-14.8', '18.1-19.2')))
+tiff("MSBio_Fig5_top.tiff", units="px", width=2300, height=1100, res=300)
 ggplot(LML_121_TG) + geom_point(aes(x=sp_2022.avg, y=sp_2072.avg, shape = "Default", color=SITE), size=3, alpha=0.8) + 
-  geom_point(aes(x=cal_2022.avg, y=cal_2072.avg, shape="Calibrated", color=SITE), size=3, alpha=0.8) + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) + 
+  geom_point(aes(x=cal_2022.avg, y=cal_2072.avg, shape="Calibrated", color=SITE), size=3, alpha=0.8) + geom_abline(intercept=0, slope=1, linetype=2) + theme_bw(base_size = 16) + theme(legend.position = "none") +
   xlab("Historic litter mass loss (%)") + ylab("Future litter mass loss \n under climate change (%)") + facet_wrap(.~Temp_group) + scale_shape_manual(name='Model', breaks=c('Default', 'Calibrated'), values=c('Default'=1, 'Calibrated'=16)) +scale_color_manual(values = colorBlind7)
+dev.off()
 #showing LQ with color
 LQ <- MSBio_BAGS %>% mutate(SITE.LT = paste(SITE, TYPE, sep=".")) %>% select(SITE.LT, BAG_LIG_N) %>% mutate(BAG_LIG_N = as.numeric(BAG_LIG_N)) %>% mutate(BAG_LIG_N.2 = as.numeric(BAG_LIG_N))
 LML_121_LQ <- LML_121 %>% mutate(SITE.LT = paste(SITE, Litter_Type, sep=".")) %>% inner_join(LQ, by='SITE.LT') 
@@ -474,12 +505,14 @@ ggplot() +
   geom_pointrange(data=LML_wide_sum, aes(x=SITE, y=mean_LPL_cal, ymin=min_LPL_cal, ymax=max_LPL_cal, group = SITE, colour = SITE, shape = "Calibrated"), size=2, alpha=0.8) +
   ylab("2072-2022 litter mass loss (%)") + scale_color_manual(values=colorBlind7) + theme_bw(base_size = 16) + 
   scale_shape_manual(name='Model', breaks=c('Default', 'Calibrated'), values=c('Default'=1, 'Calibrated'=16)) 
-#points just means
+#points just means - this is the one in figure 5!
+tiff("MSBio_Fig5_TP2.tiff", units="px", width=1520, height=1000, res=300)
 ggplot() +
   geom_point(data=LML_wide_sum, aes(x=SITE, y=mean_LPL_sp, group = SITE, colour = SITE, shape = "Default"), size=10, alpha=0.8, stroke=2) +
   geom_point(data=LML_wide_sum, aes(x=SITE, y=mean_LPL_cal, group = SITE, colour = SITE, shape = "Calibrated"), size=10, alpha=0.8, stroke =2) +
-  ylab(" Mean future-historic \n litter mass loss (%)") + scale_color_manual(values=colorBlind7) + theme_bw(base_size = 24) + 
-  scale_shape_manual(name='Model', breaks=c('Default', 'Calibrated'), values=c('Default'=1, 'Calibrated'=16)) +ylim(0,20)
+  ylab(" Mean future-historic litter mass loss (%)") + scale_color_manual(values=colorBlind7) + theme_bw(base_size = 24) + 
+  scale_shape_manual(name='Model', breaks=c('Default', 'Calibrated'), values=c('Default'=1, 'Calibrated'=16)) +ylim(-10,20) +theme(legend.position = "none")
+dev.off()
 #violins
 ggplot(LML_wide) + geom_boxplot(aes(x=SITE, y=LPL_sp, group = SITE, colour = SITE, fill = "Default"), size=1) + 
   geom_boxplot(aes(x=SITE, y=LPL_cal, group = SITE, colour = SITE, fill = "Calibrated"), size=1) +  
@@ -487,7 +520,7 @@ ggplot(LML_wide) + geom_boxplot(aes(x=SITE, y=LPL_sp, group = SITE, colour = SIT
   scale_fill_manual(name='Model', breaks=c('Default', 'Calibrated'), values=c('Default'='white', 'Calibrated'='grey'))
 
 #comparing means from 2070-2018
-lml4<- df_LML4 %>% group_by(time.point, SITE) %>% summarise(LPL = mean(LIT_PerLoss), sd= sd(LIT_PerLoss)) %>% mutate(ID='cal_2022')
+lml1<- df_LML1 %>% group_by(time.point, SITE) %>% summarise(LPL = mean(LIT_PerLoss), sd= sd(LIT_PerLoss)) %>% mutate(ID='sp_2072')
 lml <- rbind(lml1, lml2, lml3, lml4)
 #lml <- lml %>% mutate(SITE=factor(SITE, levels=c("TREE", "BART", "HARV", "GRSM", "SERC", "TALL", "LENO"))) #MAT order
 #lml <- lml %>% mutate(SITE=factor(SITE, levels=c("TREE", "BART", "SERC", "TALL", "HARV", "LENO", "GRSM"))) #moisture order
@@ -523,9 +556,61 @@ lml_dif_mod_lm <- lm(LPL_dif ~ scale(TSOI)+scale(W_SCALAR) + scale(LIG_N) +scale
 ANPP_mod <- lm(scale(ANPP) ~ scale(TSOI)+scale(W_SCALAR) + scale(LIG_N) +scale(CLAY), data=lml_dif_drivers) 
 vif(lml_dif_mod)
 summary(lml_dif_mod) 
+Anova(lml_dif_mod, type=3)
 #taking a look at realtionships
 plot(lml_dif_drivers$ANPP, lml_dif_drivers$LPL_dif)
 ggplot(data=lml_dif_drivers, aes(y=LPL_dif, x=scale(ANPP))) + geom_point() +geom_smooth(method = "lm")
+#less summarized model
+lml_dif_drivers2 <- LML_121 %>% mutate(CC_dif = (cal_2072.avg-cal_2022.avg)-(sp_2072.avg-sp_2022.avg)) %>% select(SITE, Litter_Type,SM_Type, time.point, CC_dif) %>% inner_join(MSBio_sites, by="SITE")
+lml_dif_mod2 <- lmer(CC_dif ~ scale(TSOI)+scale(W_SCALAR)+scale(LIG_N) +scale(lci_SM_ratio) +scale(CLAY)+ (1|SITE), data=lml_dif_drivers2) #scale(CLAY)+
+vif(lml_dif_mod2)
+summary(lml_dif_mod2) #none sig but clay and lig:N strongest drivers
+Anova(lml_dif_mod2, type=3)
+lml_dif_drivers2 <- lml_dif_drivers2%>% mutate(SITE=factor(SITE, levels=c("TREE", "BART", "HARV", "GRSM", "SERC", "TALL", "LENO"))) #MAT order
+ggplot(data=lml_dif_drivers2, aes(y=CC_dif, x=W_SCALAR)) + geom_point(aes(color=SITE), size=4, alpha=0.5) +geom_smooth(method = "lm", color="black") +scale_color_manual(values=colorBlind7) + theme_bw(base_size = 16)
+
+
+#####
+#for paper figure! and analysis!
+####
+#even less summarized model - this is the one in the paper! LML_121 is made up above
+MSBio_long <- MSBio_sites  %>% mutate(mean=W_SCALAR, min=W_SCALAR*lci_SM_ratio, max=W_SCALAR*uci_SM_ratio) %>% select(-LIG_N, -W_SCALAR) %>% pivot_longer(3:5, names_to = "Litter_Type", values_to = "LIG_N") %>%
+  pivot_longer(8:10, names_to = "SM_Type", values_to = "W_SCALAR") %>% mutate(S.LT.ST = paste(SITE, Litter_Type, SM_Type, sep = "."))
+lml_dif_drivers3 <- LML_121 %>% mutate(CC_dif = (cal_2072.avg-cal_2022.avg)-(sp_2072.avg-sp_2022.avg)) %>% mutate(S.LT.ST = paste(SITE, Litter_Type, SM_Type, sep = ".")) %>% select(SITE, Litter_Type,SM_Type, time.point, CC_dif, S.LT.ST) %>% inner_join(MSBio_long, by="S.LT.ST")
+lml_dif_mod3 <- lmer(CC_dif ~ scale(CLAY) + scale(LIG_N) + scale(TSOI) + scale(lci_SM_ratio) + scale(log(W_SCALAR)) + (1|SITE.x/S.LT.ST), data=lml_dif_drivers3) # 
+vif(lml_dif_mod3)
+summary(lml_dif_mod3)
+Anova(lml_dif_mod3, type=3) 
+#sensitivity: all vars = lci and LIG:N; -CLAY: same with TSOI as marginal; -lci: clay and LIG:N; -LIG:N: just lci; -WS: same; -TSOI: same (TLDR not very senstivie to var inclusion)
+#interactions: LIG_N*W_SCALAR, LIG_N*CLAY; LIG_N*TSOI - intersting that LIG:N interacts with almost every other variable - maybe also indicates site effect
+lml_dif_drivers3 <- lml_dif_drivers3%>% mutate(SITE.x=factor(SITE.x, levels=c("TREE", "BART", "HARV", "GRSM", "SERC", "TALL", "LENO"))) #MAT order
+tiff("MSBio_Fig6_LIGN.tiff", units="px", width=1570, height=1100, res=300)
+ggplot(data=lml_dif_drivers3, aes(y=CC_dif, x=LIG_N)) + geom_point(aes(color=SITE.x), size=4, alpha=0.5) +
+  geom_smooth(method = "lm", color="black") +scale_color_manual(values=colorBlind7) + theme_bw(base_size = 16) +
+  ylab("Percent difference between \ncalibrated and default litter mass \nloss under climate change (%)") +xlab("Litter lignin:N") +theme(legend.position = "none")
+dev.off()
+#adding change in climate vars as drivers
+SITE.x = c("BART", "GRSM", "HARV", "LENO", "SERC", "TALL", "TREE")
+NPP_CC = c(17, 12, 19, 11, 16, 14, 23)
+TSOI_CC = c(26, 14, 35, 10, 14, 9, 37)
+WS_CC = c(15, 3, 15, -1, 0, -9, -5)
+CC_changes = data.frame(SITE.x, NPP_CC, TSOI_CC, WS_CC)
+lml_dif_drivers3 <- lml_dif_drivers3 %>% inner_join(CC_changes, by="SITE.x")
+lml_dif_mod4 <- lmer(CC_dif ~ scale(TSOI_CC) + scale(WS_CC) + scale(LIG_N) + scale(CLAY) +scale(lci_SM_ratio)+ (1|SITE.x/S.LT.ST), data=lml_dif_drivers3) #scale(NPP_CC) + 
+vif(lml_dif_mod4) #high
+Anova(lml_dif_mod4, type=3) #NPP and TSOI correlated but keeping just one of these in the model with changes in W_SCALAR means none of these are sig; if you add CLAY and LIG:N in, these are the only significant predictors; add in lci and CLAY is not sig and lci is marginally sig
+#adding future values as drivers
+SITE.x = c("BART", "GRSM", "HARV", "LENO", "SERC", "TALL", "TREE")
+NPP_CC = c(716.5, 954.4, 758.6, 929.6, 865.2, 694.6, 636.6)
+TSOI_CC = c(10.7, 16.7, 12.0, 21.0, 16.9, 19.7, 9.3)
+WS_CC = c(0.63, 0.82, 0.76, 0.70, 0.62, 0.60, 0.42)
+CC_changes = data.frame(SITE.x, NPP_CC, TSOI_CC, WS_CC)
+lml_dif_drivers3 <- lml_dif_drivers3 %>% inner_join(CC_changes, by="SITE.x")
+lml_dif_mod4 <- lmer(CC_dif ~ scale(TSOI_CC) + scale(log(WS_CC))+ scale(LIG_N) + scale(CLAY) +scale(lci_SM_ratio) + (1|SITE.x/S.LT.ST), data=lml_dif_drivers3) #+ scale(LIG_N) + scale(CLAY) +scale(lci_SM_ratio) #scale(NPP_CC) +
+vif(lml_dif_mod4) #high when NPP included with non varaible varaibles
+Anova(lml_dif_mod4, type=3) #with jsut future values: future NPP sig; #with future values and nonvarible: NPP, TSOI, lci, LIG:N marginal (but vif>5 !); without NPP: just LIG:N and lci
+
+
 
 #by LQ instead of site
 lml1_LT <- df_LML1 %>% group_by(time.point, SITE, Litter_Type) %>% summarise(LPL = mean(LIT_PerLoss), sd= sd(LIT_PerLoss)) %>% mutate(ID='sp_2070')
