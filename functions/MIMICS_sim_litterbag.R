@@ -50,7 +50,6 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
   sim_year = 0
   i = 1
 
-  #print(dailyInput[44,4]) #this works so dataframe is getting into code which is good!
   
   for (d in 1:nday)  { 
     # For recalc of Tpars from daily forcing data
@@ -158,10 +157,6 @@ MIMICS_LITBAG <- function(forcing_df, litBAG, dailyInput=NA, loop_dailyInput=TRU
   LITBAG_out <- cbind(data.frame(SITE = forcing_df$SITE,
                                  Litter_Type = as.character(litBAG[2]),
                                  SM_Type = as.character(forcing_df$SM_TYPE),
-                                 #Decomp_rate_rm = LITbag[1],
-                                 #Decomp_rate_rs = LITbag[2],
-                                 #Decomp_rate_km = LITbag[3],
-                                 #Decomp_rate_ks = LITbag[4],
                                  DAY=seq(1:nrow(LITBAG_out))), LITBAG_out)
   
   return(LITBAG_out)
