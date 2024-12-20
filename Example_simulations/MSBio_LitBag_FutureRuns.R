@@ -1,4 +1,5 @@
-#using Derek's litterbag code to run MSBio litter decomp simulations
+#using Derek's litterbag code to run MSBio litter decomp simulations under climate change
+#*REQUIRES RUNNING "MSBio_LitBag_Runs.R" TO LINE 177 FIRST*
 
 library(ggplot2)
 library(tidyr)
@@ -83,6 +84,13 @@ BAGS <- MSBio_BAGS %>% select(SITE, TYPE, CALC_MET)
 BAGS$BAG_LITm <- ((BAG_init_size * 1e3 / 1e4)/ depth) * BAGS$CALC_MET #g/m2 converted to mg/cm3
 BAGS$BAG_LITs <- ((BAG_init_size * 1e3 / 1e4)/ depth) * (1-BAGS$CALC_MET) 
 
+#future vs historical climatology plots 
+SSP_DailyInput_clim <- SSP_DailyInput %>% mutate(site.doy=paste(SITE, DOY, sep=".")) %>% group_by(site.doy) %>% summarise(LITFALL_CC = mean(LITFALL), TSOI_CC = mean(TSOI), W_SCALAR_CC = mean(W_SCALAR))
+clim_hist_fut <- DailyInput %>% mutate(site.doy=paste(SITE, DAY, sep=".")) %>% inner_join(SSP_DailyInput_clim, by="site.doy")
+ggplot(clim_hist_fut) + geom_line(aes(x=DAY, y=TSOI), color="#117733", size=2, alpha=0.5) + geom_line(aes(x=DAY, y=TSOI_CC), color="#882255", size=2, alpha=0.5) + ylab("Soil Temperature (\u00B0C)") + xlab("Day of Year") + facet_wrap(.~SITE) +theme_bw(base_size = 16)
+ggplot(clim_hist_fut) + geom_line(aes(x=DAY, y=W_SCALAR), color="#117733", size=2, alpha=0.5) + geom_line(aes(x=DAY, y=W_SCALAR_CC), color="#882255", size=2, alpha=0.5) + ylab("Soil Moisture Scalar") + xlab("Day of Year") + facet_wrap(.~SITE) +theme_bw(base_size = 16)
+ggplot(clim_hist_fut) + geom_line(aes(x=DAY, y=LITFALL_CC), color="#882255", size=2, alpha=0.5) + geom_line(aes(x=DAY, y=LITFALL), color="#117733", size=2, alpha=0.5) + ylab(expression(paste("Litterfall (gC m"^"-2"*"day"^"-1"*")"))) + 
+  xlab("Day of Year") + facet_wrap(.~SITE) +theme_bw(base_size = 16)
 
 ####
 #run litterbag model 
@@ -162,7 +170,7 @@ for (i in Pset_ID) {
 
 
 ####
-#plot output - ***REQUIRES RUNNING "MSBio_LitBag_Runs.R" TO THIS POINT IN CODE (line 177) FIRST***
+#plot output
 ####
 
 colorBlind7  <- c("#E69F00", "#56B4E9", "#009E73",

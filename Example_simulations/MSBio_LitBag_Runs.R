@@ -394,7 +394,7 @@ Obs_ES <- Obs_ES[-1, ]
 Obs_ES$mult <- ifelse(Obs_ES$value <0, -1, 1)
 Obs_ES$rel_ES <- (abs(Obs_ES$value)/sum(abs(Obs_ES$value))) * 100 * Obs_ES$mult
 #rename Ob_ES to match parameter set and lines 399 and 400
-Obs_ES_SP<- Obs_ES 
+Obs_ES190<- Obs_ES 
 Obs_ES_Cal <- rbind(Obs_ES176, Obs_ES175, Obs_ES190) %>% group_by(Vars) %>% summarise(mean.rES = mean(rel_ES), sd.rES = sd(rel_ES)) %>% mutate(ID="Cal")
 Obs_ES_SP2 <- Obs_ES_SP %>% mutate(mean.rES=rel_ES, sd.rES=0, ID="SP") %>% select(Vars, mean.rES, sd.rES, ID)
 #creating data frame for observed effect sizes
@@ -409,6 +409,7 @@ Obs_ES_SP_points <- Obs_ES_SP2 %>% mutate(rel_ES = c(NA,NA,NA)) %>% select(Vars,
 Obs_ES_Obs_points <- Obs_ES_Obs %>% mutate(rel_ES = c(NA,NA,NA)) %>% select(Vars, rel_ES, ID)
 ES_points <- rbind(Obs_ES_Cal_points, Obs_ES_SP_points, Obs_ES_Obs_points)
 Obs_ES_all <- rbind(Obs_ES_Obs, Obs_ES_SP2, Obs_ES_Cal) 
+tiff("MSBio_Fig1_final.tiff", units="px", width=2500, height=1000, res=300)
 ggplot() + 
   geom_bar(data=Obs_ES_all, aes(x=factor(Vars, level=c('scale(log(W_SCALAR_mean))','scale(BAG_LIG_N)', 'scale(MICrK.i)'), labels = c("Soil moisture", "Lignin:N", "Copiotroph:oligotroph")),
                y=mean.rES, fill = factor(ID, level=c('Obs', 'SP', 'Cal'), labels = c("Observations", "Default", "Calibrated"))), stat="identity", position = position_dodge(), color="black", linewidth=1) +
@@ -417,3 +418,4 @@ ggplot() +
              position = position_jitterdodge(dodge.width = 0.9), alpha=0.5, size=2) + #position_dodge(0.9)
   xlab("") + ylab("Relative effect size") + geom_abline(intercept=0, slope=0, color="black", linewidth=0.6) +
   theme_bw(base_size = 16)  + scale_fill_manual(name="Type", values = c(Observations = "black", Default = "white", Calibrated="darkgrey")) 
+dev.off()
