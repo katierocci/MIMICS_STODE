@@ -71,7 +71,7 @@ calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
     Tau_MOD1 <- sqrt(ANPP/Tau_MOD[1])         
     Tau_MOD1[Tau_MOD1 < Tau_MOD[2]] <- Tau_MOD[2]
     Tau_MOD1[Tau_MOD1 > Tau_MOD[3]] <- Tau_MOD[3] 
-    beta=1 # turns off beta
+    beta=c(1,1) # turns off beta
   } else if (tauMethod=='beta') {
     Tau_MOD1 <- 1 # turns off NPP effects on turnover
     beta=beta #[1] # use Kat's density dependent function  

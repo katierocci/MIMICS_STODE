@@ -1,0 +1,169 @@
+---
+title: "MIMICS tutorial"
+author: "Katherine Rocci, based on code by Derek Pierson and Will Wieder"
+date: "2025-06-03"
+output: html_document
+---
+
+Welcome to the MIcrobial-MIneral Carbon Stabilization (MIMICS) Model Tutorial file. More details on MIMICS can be found in Wieder et al., 2015: https://doi.org/10.5194/gmd-8-1789-2015
+
+(Note that this tutorial is based on that for the Millenial model, found at https://github.com/rabramoff/Millennial/blob/master/R/simulation/model_tutorial.Rmd )
+
+#A Brief Explanation of R Markdown
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook which combines executable code with readable instructions. When you execute code within the notebook, the results appear beneath the code. You can execute a chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. You can also execute code line-by-line as you would in a regular R script, usually by pressing *Ctrl+Enter*. 
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+##Load libraries
+
+First we need to load some libraries of functions that are needed to execute the model. If you do not have them installed you can install them by navigating to the Install button under the Packages tab in your file window or by executing the code
+```
+install.packages("name_of_package")
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(DT)
+library(purrr)
+library(Metrics)
+```
+##set the working directory for the entire notebook
+
+   By default, this is the directory where this R markdown file is but we want this to be your copy of the MIMICS_STODE directory - change that below (code to change this will not display when knitted)
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = 'C:/Users/krocci/OneDrive - UCB-O365/Documents/Postdoc/MIMICS_STODE')
+```
+
+##load the necessary model components
+
+  RXEQ = MIMICS C-only equations using reverse Michaelis-Menten kinetics
+  
+  MIMICS_parameters_sandbox = MIMICS parameters from Wieder et al., 2015
+  
+  calc_Tpars = uses forcing data and parameters above to determine values needed in RXEQ
+  
+  MIMICS_calc_steady_state_pools = function that ties together other model components to determine steady state carbon pools; this effectively "spins up" the model    so it is in steady state; from here you could do further experiments like running daily data with different litter quality or temperature but we will just go over   steady state calculations in this tutorial
+
+```{r}
+#load model components
+source("functions/RXEQ.R")
+source("Parameters/MIMICS_parameters_sandbox_20231129.R")
+source("functions/calc_Tpars.R")
+source("functions/MIMICS_calc_steady_state_pools.R")
+```
+
+##load forcing data; once this chunk is run, you can view the data in the "Environment" tab to the right
+```{r}
+#long term ecological research site data
+forcing_data <- read.csv("example_simulations/data/LTER_SITE_1.csv", as.is=T)
+colnames(forcing_data)[1] <- "Set"  # Fix for first column name import error
+```
+
+##Run the model
+  
+  1. for a single site (one row in the forcing data)
+  
+  2. for multiple sites (all rows in the forcing data)
+```{r}
+#single site
+MIMout_single_raw <- MIMICS_SS(forcing_data[1,]) #row 1 = Arctic LTER
+MIMICS_ss_SingleSite <- MIMICS_SS_format(MIMout_single_raw)
+```
+
+```{r}
+#all sites
+MIMruns <- forcing_data %>% split(1:nrow(forcing_data)) %>% map(~ MIMICS_SS(df=.))
+MIMICS_ss_AllSites <- lapply(MIMruns, MIMICS_SS_format) %>% bind_rows()
+```
+
+#Plot data - single site
+```{r}
+colorBlindGrey8   <- c("#999999", "#E69F00", "#56B4E9", "#009E73", 
+                       "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+#single site - compare pools
+MIM_ss_single_long <- MIMICS_ss_SingleSite %>% select(LITm,LITs,MICr,MICk,SOMa,SOMc,SOMp) %>% pivot_longer(1:7, values_to = "Carbon", names_to = "Pool")
+ggplot(MIM_ss_single_long) + geom_point(aes(x=Pool, y=Carbon, color=Pool), size=4) +ylab(expression(paste("Carbon content in top 30cm (mgC cm "^"-3"*")")))+ scale_color_manual(values=colorBlindGrey8) + theme_bw(base_size = 14)
+
+```
+
+#Plot data - multiple sites
+```{r}
+safe_colorblind_palette <- c("#88CCEE", "#CC6677", "#DDCC77", "#117733", "#332288", "#AA4499", 
+                             "#44AA99", "#999933", "#882255", "#661100", "#6699CC", "#888888",
+                             "#E69F00", "#D55E00")
+
+#Compare one pool or metric across sites
+ggplot(MIMICS_ss_AllSites) + geom_point(aes(x=SET, y=SOMp/(SOMp+SOMa+SOMc), color=SET), size=4) +ylab("Fraction of SOM-C in SOMp")+ xlab("Site") + scale_color_manual(values=safe_colorblind_palette, guide="none") + theme_bw(base_size = 14)
+
+#evaluate how environmental variables influence carbon pools
+ggplot(MIMICS_ss_AllSites) + geom_point(aes(x=TSOI, y=MIMMIC, color=SET), size=4) +ylab(expression(paste("Microbial biomass carbon \n content in top 30cm (mgC cm "^"-3"*")")))+ xlab("Soil temperature (\u00B0C)") + scale_color_manual(values=safe_colorblind_palette, name="Site") + theme_bw(base_size = 14)
+
+ggplot(MIMICS_ss_AllSites) + geom_point(aes(x=LIG_N, y=SOMc, color=SET), size=4) +ylab(expression(paste("SOMc carbon content \n in top 30cm (mgC cm "^"-3"*")")))+ xlab("Litter lignin:N") + scale_color_manual(values=safe_colorblind_palette, name="Site") + theme_bw(base_size = 14)
+```
+
+##Try some model changes
+  
+  1. Change the forcings to carry out a "warming experiment"
+```{r}
+#create warmer data
+forcing_data_warm <- forcing_data %>% mutate(TSOI2 = TSOI+5) %>% select(-TSOI) %>% mutate(TSOI=TSOI2) %>% select(-TSOI2)
+#run the model with warmer data
+MIMruns_warm <- forcing_data_warm %>% split(1:nrow(forcing_data_warm)) %>% map(~ MIMICS_SS(df=.))
+MIMICS_ss_AllSites_warm <- lapply(MIMruns_warm, MIMICS_SS_format) %>% bind_rows()
+#format data for plotting 
+MIM_ss_all_long <- MIMICS_ss_AllSites %>% select(SET,LITm,LITs,MICr,MICk,SOMa,SOMc,SOMp) %>% pivot_longer(2:8, values_to = "Carbon", names_to = "Pool") %>% mutate(Site.pool=paste(SET, Pool, sep=".")) %>% select(Site.pool, Carbon)
+MIM_ss_all_warm_long <- MIMICS_ss_AllSites_warm %>% select(SET,LITm,LITs,MICr,MICk,SOMa,SOMc,SOMp) %>% pivot_longer(2:8, values_to = "Carbon_W", names_to = "Pool") %>% mutate(Site.pool=paste(SET, Pool, sep=".")) %>% select(Site.pool, Carbon_W)
+MIM_WarmComp <- inner_join(MIM_ss_all_long, MIM_ss_all_warm_long, by="Site.pool") %>% mutate(RR=Carbon_W/Carbon) %>% separate_wider_delim(cols=Site.pool, delim=".",names=c("Site", "Pool"))
+#plot comparisons
+#each site
+ggplot(MIM_WarmComp) + geom_point(aes(x=Pool, y=RR, color=Pool)) + facet_wrap(.~Site) + scale_color_manual(values=safe_colorblind_palette) + ylab("Response ratio of warming/control") + theme_bw(base_size = 14)
+#across sites - very minimal variation across sites!
+ggplot(MIM_WarmComp) + geom_boxplot(aes(x=Pool, y=RR, fill=Pool)) + scale_fill_manual(values=safe_colorblind_palette) + ylab("Response ratio of warming/control") + theme_bw(base_size = 14)
+```
+  
+  2. parameter change
+  
+    We do this manually in MIMICS by adding multipliers. In MIMICS_parameter_sandbox you'll find some existing multipliers labeled as "_MULT". Below, we'll use one of those, but you could add your own multiplier, adding a complementary multiplier in the appropriate location in the calc_Tpars code.
+```{r}
+#first, make a copy of the parameter file so you can alter it without affecting your other runs; you can simply copy and paste the code in that file to a new file and load it here
+#in this new parameter file, we've changed the desorb_MULT to 1.2 to increase desorption by 20%
+source("Parameters/MIMICS_parameters_sandbox_ParamAlter.R")
+#note because parameters become values in the global environment, running this here will override code above, be sure to change back to the default parameter set (by running the chunk that loads model components) if you want to run the code above this chunk again
+
+MIMruns_desorb <- forcing_data %>% split(1:nrow(forcing_data)) %>% map(~ MIMICS_SS(df=.))
+MIMICS_ss_AllSites_desorb <- lapply(MIMruns_desorb, MIMICS_SS_format) %>% bind_rows()
+#format data for plotting 
+MIM_ss_all_long <- MIMICS_ss_AllSites %>% select(SET,LITm,LITs,MICr,MICk,SOMa,SOMc,SOMp) %>% pivot_longer(2:8, values_to = "Carbon", names_to = "Pool") %>% mutate(Site.pool=paste(SET, Pool, sep=".")) %>% select(Site.pool, Carbon)
+MIM_ss_all_desorb_long <- MIMICS_ss_AllSites_desorb %>% select(SET,LITm,LITs,MICr,MICk,SOMa,SOMc,SOMp) %>% pivot_longer(2:8, values_to = "Carbon_d", names_to = "Pool") %>% mutate(Site.pool=paste(SET, Pool, sep=".")) %>% select(Site.pool, Carbon_d)
+MIM_ParamComp <- inner_join(MIM_ss_all_long, MIM_ss_all_desorb_long, by="Site.pool") %>% mutate(RR=Carbon_d/Carbon) %>% separate_wider_delim(cols=Site.pool, delim=".",names=c("Site", "Pool"))
+#plot comparisons
+#each site
+ggplot(MIM_ParamComp) + geom_point(aes(x=Pool, y=RR, color=Pool)) + facet_wrap(.~Site) + scale_color_manual(values=safe_colorblind_palette) + ylab("Response ratio of increased desorb/control") + theme_bw(base_size = 14)
+#across sites - minimal variation across sites!
+ggplot(MIM_ParamComp) + geom_boxplot(aes(x=Pool, y=RR, fill=Pool)) + scale_fill_manual(values=safe_colorblind_palette) + ylab("Response ratio of increased desorb/control") + theme_bw(base_size = 14)
+```
+  
+  3. change model structure
+  
+    MIMICS can use two different controls on microbial turnover. The current default structure uses the beta parameter from Georgiou et al., 2017 which approximates a density dependent effect of increasing microbial biomass. The alternative structure is to use an NPP-based control that is meant to approximate a similar phenomenon. You can toggle this on and off in the model in the MIMICS_parameters_sandbox file. Importantly, you can check the calc_Tpars file to see how those changes are implemented to change model structure using if statements. This provides a template for other structural changes you could implement in MIMICS.
+```{r}
+#first, make a copy of the parameter file so you can alter it without affecting your other runs; you can simply copy and paste the code in that file to a new file and load it here
+#in this new parameter file, we've changed the tauMethod to 'NPP'
+source("Parameters/MIMICS_parameters_sandbox_StructAlter.R")
+#note because parameters become values in the global environment, running this here will override code above, be sure to change back to the default parameter set (by running the chunk that loads model components) if you want to run the code above this chunk again
+
+MIMruns_tau <- forcing_data %>% split(1:nrow(forcing_data)) %>% map(~ MIMICS_SS(df=.))
+MIMICS_ss_AllSites_tau <- lapply(MIMruns_tau, MIMICS_SS_format) %>% bind_rows()
+#format data for plotting 
+MIM_ss_all_long <- MIMICS_ss_AllSites %>% select(SET,LITm,LITs,MICr,MICk,SOMa,SOMc,SOMp) %>% pivot_longer(2:8, values_to = "Carbon", names_to = "Pool") %>% mutate(Site.pool=paste(SET, Pool, sep=".")) %>% select(Site.pool, Carbon)
+MIM_ss_all_tau_long <- MIMICS_ss_AllSites_tau %>% select(SET,LITm,LITs,MICr,MICk,SOMa,SOMc,SOMp) %>% pivot_longer(2:8, values_to = "Carbon_t", names_to = "Pool") %>% mutate(Site.pool=paste(SET, Pool, sep=".")) %>% select(Site.pool, Carbon_t)
+MIM_TauComp <- inner_join(MIM_ss_all_long, MIM_ss_all_tau_long, by="Site.pool") %>% mutate(RR=Carbon_t/Carbon) %>% separate_wider_delim(cols=Site.pool, delim=".",names=c("Site", "Pool"))
+#plot comparisons
+#each site
+ggplot(MIM_TauComp) + geom_point(aes(x=Pool, y=RR, color=Pool)) + facet_wrap(.~Site) + scale_color_manual(values=safe_colorblind_palette) + ylab("Response ratio of NPP tau/beta tau") + theme_bw(base_size = 14)
+#across sites
+ggplot(MIM_TauComp) + geom_boxplot(aes(x=Pool, y=RR, fill=Pool)) + scale_fill_manual(values=safe_colorblind_palette) + ylab("Response ratio of NPP tau/beta tau") + theme_bw(base_size = 14)
+```
+    

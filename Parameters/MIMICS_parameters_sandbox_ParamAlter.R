@@ -40,7 +40,5 @@ tauMethod='beta'  #'NPP' and 'beta' accepted
 
 #Set default multipliers
 Tau_MULT = 1
-desorb_MULT = 1
+desorb_MULT = 1.2
 fPHYS_MULT = 1
-
-

@@ -5,6 +5,9 @@ library(boot)
 RXEQ <- function(t, y, pars) {
   
   #debug
+  #print(length(y))
+  
+  #debug
   #y = Ty 
   #t = 1e6 
   #pars = Tpars
@@ -46,6 +49,7 @@ RXEQ <- function(t, y, pars) {
     
     output <- list(c(dLIT_1, dLIT_2, dMIC_1, dMIC_2, dSOM_1, dSOM_2, dSOM_3),
                    c(CO2r=CO2_1, CO2K=CO2_2))
+
     
     return(output)
   })

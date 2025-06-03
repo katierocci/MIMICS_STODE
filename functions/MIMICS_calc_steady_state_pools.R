@@ -54,6 +54,9 @@ MIMICS_SS <- function(df){
                             CN=CN, LIG=LIG, LIG_N=LIG_N,
                             theta_liq=theta_liq, theta_frzn=theta_frzn, W_SCALAR = W_SCALAR) 
   
+  #debug
+  #print(Tpars$VMAX)
+  
   # Create arrays to hold output
   lit     <- Tpars$I
   mic     <- Tpars$I
@@ -66,6 +69,11 @@ MIMICS_SS <- function(df){
   Ty    <- c(LIT_1 = lit[1], LIT_2 = lit[2], 
               MIC_1 = mic[1], MIC_2 = mic[2], 
               SOM_1 = som[1], SOM_2 = som[2], SOM_3 = som[3])
+  
+  #debug
+  #print(length(Ty))
+  #str(Ty)
+  #print(is.numeric(Ty))
   
   # ## Set global parameters to ensure passing of variables to stode function
   # .GlobalEnv$VMAX <- Tpars$VMAX
