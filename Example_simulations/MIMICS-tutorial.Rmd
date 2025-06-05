@@ -1,6 +1,6 @@
 ---
 title: "MIMICS tutorial"
-author: "Katherine Rocci, based on code by Derek Pierson and Will Wieder"
+author: "Katie Rocci, based on code by Derek Pierson and Will Wieder"
 date: "2025-06-03"
 output: html_document
 ---
@@ -57,7 +57,7 @@ source("functions/MIMICS_calc_steady_state_pools.R")
 ##load forcing data; once this chunk is run, you can view the data in the "Environment" tab to the right
 ```{r}
 #long term ecological research site data
-forcing_data <- read.csv("example_simulations/data/LTER_SITE_1.csv", as.is=T)
+forcing_data <- read.csv("example_simulations/data/LTER_SITE_vwc.csv", as.is=T)
 colnames(forcing_data)[1] <- "Set"  # Fix for first column name import error
 ```
 
@@ -95,12 +95,14 @@ safe_colorblind_palette <- c("#88CCEE", "#CC6677", "#DDCC77", "#117733", "#33228
                              "#E69F00", "#D55E00")
 
 #Compare one pool or metric across sites
-ggplot(MIMICS_ss_AllSites) + geom_point(aes(x=SET, y=SOMp/(SOMp+SOMa+SOMc), color=SET), size=4) +ylab("Fraction of SOM-C in SOMp")+ xlab("Site") + scale_color_manual(values=safe_colorblind_palette, guide="none") + theme_bw(base_size = 14)
+#amount of soil C in SOMp (similar to fMAOM)
+ggplot(MIMICS_ss_AllSites) + geom_point(aes(x=SET, y=SOMp/(SOMp+SOMa+SOMc), color=SET), size=4) +ylab("Fraction of soil carbon in SOMp")+ xlab("Site") + scale_color_manual(values=safe_colorblind_palette, guide="none") + theme_bw(base_size = 14)
 
 #evaluate how environmental variables influence carbon pools
-ggplot(MIMICS_ss_AllSites) + geom_point(aes(x=TSOI, y=MIMMIC, color=SET), size=4) +ylab(expression(paste("Microbial biomass carbon \n content in top 30cm (mgC cm "^"-3"*")")))+ xlab("Soil temperature (\u00B0C)") + scale_color_manual(values=safe_colorblind_palette, name="Site") + theme_bw(base_size = 14)
-
-ggplot(MIMICS_ss_AllSites) + geom_point(aes(x=LIG_N, y=SOMc, color=SET), size=4) +ylab(expression(paste("SOMc carbon content \n in top 30cm (mgC cm "^"-3"*")")))+ xlab("Litter lignin:N") + scale_color_manual(values=safe_colorblind_palette, name="Site") + theme_bw(base_size = 14)
+#soil moisture and microbial biomass
+ggplot(MIMICS_ss_AllSites) + geom_point(aes(x=THETA_LIQ, y=MIMMIC, color=SET), size=4) +ylab(expression(paste("Microbial biomass carbon \n content in top 30cm (mgC cm "^"-3"*")")))+ xlab("Soil volumetric water content (%)") + scale_color_manual(values=safe_colorblind_palette, name="Site") + theme_bw(base_size = 14)
+#soil clay content and SOMp (MAOM-like pool)
+ggplot(MIMICS_ss_AllSites) + geom_point(aes(x=CLAY, y=SOMp, color=SET), size=4) +ylab(expression(paste("SOMp carbon content \n in top 30cm (mgC cm "^"-3"*")")))+ xlab("Soil clay content (%)") + scale_color_manual(values=safe_colorblind_palette, name="Site") + theme_bw(base_size = 14)
 ```
 
 ##Try some model changes
@@ -125,7 +127,7 @@ ggplot(MIM_WarmComp) + geom_boxplot(aes(x=Pool, y=RR, fill=Pool)) + scale_fill_m
   
   2. parameter change
   
-    We do this manually in MIMICS by adding multipliers. In MIMICS_parameter_sandbox you'll find some existing multipliers labeled as "_MULT". Below, we'll use one of those, but you could add your own multiplier, adding a complementary multiplier in the appropriate location in the calc_Tpars code.
+We do this manually in MIMICS by adding multipliers. In MIMICS_parameter_sandbox you'll find some existing multipliers labeled as "_MULT". Below, we'll use one of those, but you could add your own multiplier, adding a complementary multiplier in the appropriate location in the calc_Tpars code.
 ```{r}
 #first, make a copy of the parameter file so you can alter it without affecting your other runs; you can simply copy and paste the code in that file to a new file and load it here
 #in this new parameter file, we've changed the desorb_MULT to 1.2 to increase desorption by 20%
@@ -147,7 +149,7 @@ ggplot(MIM_ParamComp) + geom_boxplot(aes(x=Pool, y=RR, fill=Pool)) + scale_fill_
   
   3. change model structure
   
-    MIMICS can use two different controls on microbial turnover. The current default structure uses the beta parameter from Georgiou et al., 2017 which approximates a density dependent effect of increasing microbial biomass. The alternative structure is to use an NPP-based control that is meant to approximate a similar phenomenon. You can toggle this on and off in the model in the MIMICS_parameters_sandbox file. Importantly, you can check the calc_Tpars file to see how those changes are implemented to change model structure using if statements. This provides a template for other structural changes you could implement in MIMICS.
+MIMICS can use two different controls on microbial turnover. The current default structure uses the beta parameter from Georgiou et al., 2017 which approximates a density dependent effect of increasing microbial biomass. The alternative structure is to use an NPP-based control that is meant to approximate a similar phenomenon. You can toggle this on and off in the model in the MIMICS_parameters_sandbox file. Importantly, you can check the calc_Tpars file to see how those changes are implemented to change model structure using if statements. This provides a template for other structural changes you could implement in MIMICS.
 ```{r}
 #first, make a copy of the parameter file so you can alter it without affecting your other runs; you can simply copy and paste the code in that file to a new file and load it here
 #in this new parameter file, we've changed the tauMethod to 'NPP'

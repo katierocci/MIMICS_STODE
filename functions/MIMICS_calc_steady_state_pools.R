@@ -32,8 +32,12 @@ MIMICS_SS <- function(df){
   CN <- df$CN
 
   # Bring in soil moisture information
-  theta_liq  <- df$GWC/100  # GWC = Gravimetric water content
-  theta_frzn <- 0           # Not used here. TODO Needs validation. 
+  #if using GWC
+  #theta_liq  <- df$GWC/100  # GWC = Gravimetric water content
+  #theta_frzn <- 0           # Not used here. TODO Needs validation.
+  #if using volumetric
+  theta_liq  <- df$THETA_LIQ
+  theta_frzn <- df$THETA_FRZN
 
   ### Bring in mean annual temperature data
   MAT <- df$MAT  
