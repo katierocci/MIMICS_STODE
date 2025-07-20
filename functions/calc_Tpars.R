@@ -11,7 +11,7 @@
 # -- fWmethod is describes how to calculate fW 0=none 1=corpse, 2=calibrated, 3=moisture scalar from other model
 # -- historic is a logical for using historic MAT to modify Vslope & Vint
 
-calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
+calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA, AlFe=NA,
                              theta_liq=NA, theta_frzn=NA, W_SCALAR=NA, litfall=NA) {
   
   # Set lig:N value if not given
@@ -91,11 +91,21 @@ calc_Tpars_Conly <- function(ANPP, fCLAY, TSOI, MAT=NA, CN, LIG, LIG_N=NA,
                 fCHEM_K[1] * exp(fCHEM_K[2]*fMET) * fCHEM_K[3]) 	
   fAVAI    <- 1 - (fPHYS + fCHEM)
   
-  desorb   <- fSOM_p[1] * exp(fSOM_p[2]*(fCLAY))                  
+  if (desorbMethod == 'clay') {
+    desorb   <- fSOM_p[1] * exp(fSOM_p[2]*(fCLAY))
+  } else if (desorbMethod=='metal') {
+    fMETAL <- ifelse(AlFe<6367, AlFe/6366.6, 1)
+    desorb   <- fSOM_p[1] * exp(fSOM_p[2]*(fMETAL))
+  }
+                 
   desorb   <- desorb * desorb_MULT
   fPHYS    <- fPHYS * fPHYS_MULT
   
-  pSCALAR  <- PHYS_scalar[1] * exp(PHYS_scalar[2]*(sqrt(fCLAY)))  #Scalar for texture effects on SOMp
+  if (psMethod == 'clay') {
+    pSCALAR  <- PHYS_scalar[1] * exp(PHYS_scalar[2]*(sqrt(fCLAY)))  #Scalar for texture effects on SOMp
+  } else if (psMethod=='metal') {
+    pSCALAR  <- PHYS_scalar[1] * exp(PHYS_scalar[2]*(sqrt(fMETAL)))  #Scalar for texture effects on SOMp
+  }
   
   v_MOD    <- vMOD  
   k_MOD    <- kMOD 

@@ -37,6 +37,8 @@ fWmethod=1      #0-> fW=1, 1->CORPSE, 2->Calibrated, 3->water scalar from other 
 historic=FALSE   #modify Vmax based on historic MAT
 fixed_fMET=FALSE #calculate fMET based on litter chemistry
 tauMethod='beta'  #'NPP' and 'beta' accepted
+desorbMethod='clay' #'clay' and 'metal' accepted - not extensively tested!
+psMethod='clay' #'clay' and 'metal' accepted - not extensively tested!
 
 #Set default multipliers
 Tau_MULT = 1

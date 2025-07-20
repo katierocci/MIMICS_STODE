@@ -14,6 +14,8 @@ MIMICS_SS <- function(df){
   # Convert all column names to upper case
   colnames(df) <- toupper(colnames(df))
   
+  #print(df)
+  
   ### Setup a var to collect run notes
   note <- ""
   
@@ -22,6 +24,9 @@ MIMICS_SS <- function(df){
   
   ### Bring in CLAY value, convert from percent to decimal
   fCLAY <- df$CLAY/100
+  
+  ### Bring in metals value
+  AlFe <- df$ALFE
   
   ### Bring in TSOI value
   TSOI <- df$TSOI
@@ -55,7 +60,7 @@ MIMICS_SS <- function(df){
   ############################################################
   # function calculates fMET with LIG_N if provided in input data.
   Tpars <- calc_Tpars_Conly(ANPP=ANPP, fCLAY=fCLAY, TSOI=TSOI, MAT=MAT,     
-                            CN=CN, LIG=LIG, LIG_N=LIG_N,
+                            CN=CN, LIG=LIG, LIG_N=LIG_N, AlFe=AlFe,
                             theta_liq=theta_liq, theta_frzn=theta_frzn, W_SCALAR = W_SCALAR) 
   
   #debug
