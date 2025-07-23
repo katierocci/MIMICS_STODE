@@ -24,7 +24,7 @@ PHYS_scalar <- c(2, -2, NA, NA, NA, NA)
 FI      <- c(0.05, 0.05)
 fmet_p <- c(1, 0.85, 0.013)
 
-depth <- 30 # set soil depth
+depth <- 20 # set soil depth
 h2y        <- 24*365
 MICROtoECO <- depth * 1e4 * 1e-3  # mgC/cm3 to g/m2
 
