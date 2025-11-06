@@ -1,5 +1,5 @@
 ## Set working drive
-setwd("C:/github/MIMICS_STODE")
+#setwd("C:/github/MIMICS_STODE")
 
 #Libraries
 library(rootSolve)
@@ -46,27 +46,37 @@ desorb_MULT = 1
 fPHYS_MULT = 1
 
 # N parameters
-NUE <<- rep(0.9, 4) #0.85
+NUE <<- rep(0.85, 4) #was set to 0.9 - 0.85 from Kyker-Snowman
 CN_m        <<- 15
 CN_r        <<- 6
 CN_K        <<- 10
 Nleak <<- 0.2 #0.2
-densDep <<- 1 #0.2
+densDep <<- 1 #beta off 
 
 ###########################################
 # MIMICS single point function
 ###########################################
 
-data = read.csv("LTER_SITE_1.csv")
-df <- data[1,] 
+#LTER input data
+# data = read.csv("LTER_SITE_1.csv")
+# df <- data[1,] 
+# 
+# Site = df$Site
+# ANPP = df$ANPP/2 
+# TSOI = df$MAT
+# fCLAY = df$CLAY2/100
+# lig_N = (df$LIG/100)/(1/(df$CN/2.5))
+# fMET <- fmet_p[1] * (fmet_p[2] - fmet_p[3] * lig_N) 
+# CN_s        <<- (df$CN-CN_m*fMET)/(1-fMET)
 
-Site = df$Site
-ANPP = df$ANPP/2 
-TSOI = df$MAT
-fCLAY = df$CLAY2/100
-lig_N = (df$LIG/100)/(1/(df$CN/2.5))
+#make your own input data
+Site = 'ParamTraits_test'
+ANPP = 500 
+TSOI = 20
+fCLAY = 0.33
+lig_N = 25
 fMET <- fmet_p[1] * (fmet_p[2] - fmet_p[3] * lig_N) 
-CN_s        <<- (df$CN-CN_m*fMET)/(1-fMET)
+CN_s        <<- (50-CN_m*fMET)/(1-fMET)
 
 ############################################################
 # MIMICS MODEL CODE STARTS HERE
@@ -185,6 +195,7 @@ MIMSOC    <- sum(test[[1]])  * depth *1e4 / 1e6
 # 1.656909890 4.669793042 0.025965813 0.004162176 0.772933300 3.266147911 3.854644406 
 
 test[[1]]
+output <- t(as.data.frame(test[[1]]))
 attributes(test)
 
 

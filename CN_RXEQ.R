@@ -70,7 +70,7 @@ CN_RXEQ <- function(t, y, pars) {
     upMIC_1_N  = NUE[1]*(LITminN[1] + SOMminN[1]) + NUE[2]*(LITminN[2]) + DINup[1] #!!! Emily's code only has one NUE value
   
     CNup[1]    = (upMIC_1)/(upMIC_1_N + 1e-10)
-  #   Overflow[1] = (upMIC_1) - (upMIC_1_N)*min(CN_r, CNup[1])
+    Overflow[1] = (upMIC_1) - (upMIC_1_N)*min(CN_r, CNup[1])
     Nspill[1]   = (upMIC_1_N) - (upMIC_1)/max(CN_r, CNup[1])
   
   # #! Add Overflow_r and Overflow_k to output netCDF file. Units conversion occurs in subroutine mimics_caccum. -mdh 10/12/2020
@@ -80,7 +80,7 @@ CN_RXEQ <- function(t, y, pars) {
     upMIC_2_N  = NUE[3]*(LITminN[3] + SOMminN[2]) + NUE[4]*(LITminN[4]) + DINup[2]
   
     CNup[2]    = (upMIC_2)/(upMIC_2_N+1e-10)
-  #   Overflow[2] = (upMIC_2) - (upMIC_2_N)*min(CN_K, CNup[2])
+    Overflow[2] = (upMIC_2) - (upMIC_2_N)*min(CN_K, CNup[2])
     Nspill[2]   = (upMIC_2_N) - (upMIC_2)/max(CN_K, CNup[2])
   
   # #! Add Overflow_r and Overflow_k to output netCDF file. Units conversion occurs in subroutine mimics_caccum. -mdh 10/12/2020
@@ -107,6 +107,15 @@ CN_RXEQ <- function(t, y, pars) {
     
     LeachingLoss = Nleak*DIN
     dDIN = dDIN-LeachingLoss #N leaching losses
+    
+    # account for overflow respiration fluxes
+    #KR added this to the code 10/24/25 from CN_RXEQ function in SoilStoich repo
+    if (Overflow[1] > 1e-10) {
+      dMIC_1 = dMIC_1 - Overflow[1]
+    }
+    if (Overflow[2] > 1e-10) {
+      dMIC_2 = dMIC_2 - Overflow[2]
+    }
     
     list(c(dLIT_1, dLIT_2, dMIC_1, dMIC_2, dSOM_1, dSOM_2, dSOM_3, dLIT_1_N, dLIT_2_N, dMIC_1_N, dMIC_2_N, dSOM_1_N, dSOM_2_N, dSOM_3_N, dDIN))
   })
