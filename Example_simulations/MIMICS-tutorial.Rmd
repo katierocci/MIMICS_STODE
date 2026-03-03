@@ -45,7 +45,7 @@ knitr::opts_knit$set(root.dir = 'C:/Users/krocci/OneDrive - UCB-O365/Documents/P
   
   calc_Tpars = uses forcing data and parameters above to determine values needed in RXEQ
   
-  MIMICS_calc_steady_state_pools = function that ties together other model components to determine steady state carbon pools; this effectively "spins up" the model    so it is in steady state; from here you could do further experiments like running daily data with different litter quality or temperature but we will just go over   steady state calculations in this tutorial
+  MIMICS_calc_steady_state_pools = function that ties together other model components to determine steady state carbon pools; this effectively "spins up" the model so it is in steady state; from here you could do further experiments like running daily data with different litter quality or temperature but we will just go over steady state calculations in this tutorial
 
 ```{r}
 #load model components
