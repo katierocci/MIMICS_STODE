@@ -170,3 +170,4 @@ ggplot(MIM_TauComp) + geom_point(aes(x=Pool, y=RR, color=Pool)) + facet_wrap(.~S
 ggplot(MIM_TauComp) + geom_boxplot(aes(x=Pool, y=RR, fill=Pool)) + scale_fill_manual(values=safe_colorblind_palette) + ylab("Response ratio of NPP tau/beta tau") + theme_bw(base_size = 14)
 ```
     
+Congratulations! You've reached the end of the tutorial. Try changes to forcing data, parameters, or model structure on your own!
