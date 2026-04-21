@@ -108,7 +108,9 @@ ggplot(MIMICS_ss_AllSites) + geom_point(aes(x=CLAY, y=SOMp, color=SET), size=4) 
 
 ##Try some model changes
   
-  1. Change the forcings to carry out a "warming experiment"
+  1. Change the forcing data 
+  
+  Carry out a "warming experiment" by adding 5C to the soil temperature (TSOI) in the forcing data.
 ```{r}
 #create warmer data
 forcing_data_warm <- forcing_data %>% mutate(TSOI2 = TSOI+5) %>% select(-TSOI) %>% mutate(TSOI=TSOI2) %>% select(-TSOI2)
