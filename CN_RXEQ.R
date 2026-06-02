@@ -82,6 +82,8 @@ CN_RXEQ <- function(t, y, pars) {
     CNup[2]    = (upMIC_2)/(upMIC_2_N+1e-10)
     Overflow[2] = (upMIC_2) - (upMIC_2_N)*min(CN_K, CNup[2])
     Nspill[2]   = (upMIC_2_N) - (upMIC_2)/max(CN_K, CNup[2])
+    
+    #print(Overflow)
   
   # #! Add Overflow_r and Overflow_k to output netCDF file. Units conversion occurs in subroutine mimics_caccum. -mdh 10/12/2020
   # #mimicsflux%Overflow_k(npt) = mimicsflux%Overflow_k(npt) + Overflow_k
@@ -110,10 +112,10 @@ CN_RXEQ <- function(t, y, pars) {
     
     # account for overflow respiration fluxes
     #KR added this to the code 10/24/25 from CN_RXEQ function in SoilStoich repo
-    if (Overflow[1] > 1e-10) {
+    if (!is.na(Overflow[1]) & Overflow[1] > 1e-10) {
       dMIC_1 = dMIC_1 - Overflow[1]
     }
-    if (Overflow[2] > 1e-10) {
+    if (!is.na(Overflow[2]) & Overflow[2] > 1e-10) {
       dMIC_2 = dMIC_2 - Overflow[2]
     }
     
