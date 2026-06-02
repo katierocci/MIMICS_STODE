@@ -36,7 +36,7 @@ calc_Tpars <- function(TSOI, ANPP, CLAY, CN, LIG) {
   
   tau <- c(tau_r[1]*exp(tau_r[2]*fMET), 
            tau_K[1]*exp(tau_K[2]*fMET))   
-  tau <- tau * Tau_MOD1 * Tau_MOD2 * Tau_MULT 
+  tau <- tau * Tau_MOD1 * Tau_MOD2 * Tau_MULT
   
   fPHYS    <- c(fPHYS_r[1] * exp(fPHYS_r[2]*fCLAY), 
                 fPHYS_K[1] * exp(fPHYS_K[2]*fCLAY)) 	            
