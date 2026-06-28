@@ -7,8 +7,8 @@ aV      <- rep(0.000008, 6)
 Kslope  <- rep(c(0.025, 0.035, 0.025),2)
 Kint    <- rep(3.19, 6)
 aK      <- rep(10, 6)
-vMOD    <- c(10, 2, 10, 3, 3, 2)
-kMOD    <- c(8, 2, 4, 2, 4, 6)
+vMOD    <- c(10, 2, 10, 3, 3, 2) #LITm, LITs, SOMa for MICr and then for MICk
+kMOD    <- c(8, 2, 4, 2, 4, 6) #LITm, LITs, SOMa for MICr and then for MICk
 KO      <- c(6, 6)
 CUE     <- c(0.55, 0.25, 0.75, 0.35)
 tau_r   <- c(0.00052, 0.3)

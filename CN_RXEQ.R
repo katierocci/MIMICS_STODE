@@ -6,6 +6,8 @@ CN_RXEQ <- function(t, y, pars) {
   
   with (as.list(c(y, pars)),{
     
+    #LIT1 = LITm; LIT2 = LITs; SOM1 = SOMp; SOM2=SOMc; SOM3=SOMa; MIC1=MICr; MIC2=MICk
+    
     LITmin[1] = MIC_1 * VMAX[1] * LIT_1 / (KM[1] + MIC_1)
     LITmin[2] = MIC_1 * VMAX[2] * LIT_2 / (KM[2] + MIC_1)
     MICtrn[1] = MIC_1^densDep * tau[1] * fPHYS[1] 

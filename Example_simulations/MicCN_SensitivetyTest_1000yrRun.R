@@ -645,7 +645,6 @@ for (lter in 1:nrow(df)) {
   MIM_output_CUE <- data_frame()
   
   #average microbial turnover time 
-  #varying from residence times of 0.05 to 0.5 years or TTs of 20 to 2 yr-1 or 0.0023 to 0.00023, in amounts of 0.001035
   #plus defaults (0.55, 0.75), plus average of defaults (0.65,0.65)
   CUEs = list(c(0.37, 0.37), c(0.55,0.55), c(0.66,0.66), c(0.72,0.72), c(0.78, 0.78), c(0.55, 0.75), c(0.65, 0.65))
   
